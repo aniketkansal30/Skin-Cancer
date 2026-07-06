@@ -7,6 +7,9 @@ import { Session } from "@supabase/supabase-js";
 // Setup global auth event listeners
 const authListeners: ((event: string, session: Session | null) => void)[] = [];
 
+// Setup global channel subscriptions for real-time notifications
+const globalChannels: Record<string, any> = {};
+
 // Seed fallback data for client-only static hosting environments (e.g. Vercel)
 const DEFAULT_FALLBACK_SCANS = [
   {
@@ -481,6 +484,31 @@ class SupabaseQueryBuilder {
           tableData.push(newRow);
           localStorage.setItem(`dermshield_table_${this.tableName}`, JSON.stringify(tableData));
           results.push(newRow);
+
+          // Dispatch real-time events to active matching channel listeners
+          const currentTable = this.tableName;
+          setTimeout(() => {
+            Object.values(globalChannels).forEach((chan: any) => {
+              if (chan && Array.isArray(chan.listeners)) {
+                chan.listeners.forEach((listener: any) => {
+                  if (listener.table === currentTable) {
+                    let match = true;
+                    if (listener.filter) {
+                      const parts = listener.filter.split("=eq.");
+                      if (parts.length === 2) {
+                        const field = parts[0];
+                        const val = parts[1];
+                        match = String(newRow[field]).toLowerCase() === String(val).toLowerCase();
+                      }
+                    }
+                    if (match) {
+                      listener.callback({ new: newRow });
+                    }
+                  }
+                });
+              }
+            });
+          }, 0);
         }
       } catch (err: any) {
         console.error(`Mock database insert failed in table ${this.tableName}:`, err);
@@ -765,5 +793,37 @@ export const supabase: any = {
 
   from(tableName: string) {
     return new SupabaseQueryBuilder(tableName);
+  },
+
+  channel(channelName: string) {
+    return {
+      name: channelName,
+      listeners: [] as { event: string; table: string; filter: string; callback: (payload: any) => void }[],
+      on(type: string, filterConfig: any, callback: (payload: any) => void) {
+        if (type === "postgres_changes") {
+          this.listeners.push({
+            event: filterConfig.event || "*",
+            table: filterConfig.table,
+            filter: filterConfig.filter || "",
+            callback
+          });
+        }
+        return this;
+      },
+      subscribe() {
+        globalChannels[channelName] = this;
+        return this;
+      },
+      unsubscribe() {
+        delete globalChannels[channelName];
+      }
+    };
+  },
+
+  removeChannel(channelObj: any) {
+    if (channelObj && channelObj.name) {
+      delete globalChannels[channelObj.name];
+    }
+    return { error: null };
   }
 };
