@@ -1,0 +1,184 @@
+{
+  "users": [
+    {
+      "id": "u-patient-1",
+      "email": "patient@dermshield.com",
+      "role": "patient",
+      "name": "Aniket Kansal",
+      "registrationDate": "2026-01-10T10:00:00.000Z"
+    },
+    {
+      "id": "u-doctor-1",
+      "email": "doctor@dermshield.com",
+      "role": "doctor",
+      "name": "Dr. Sarah Jenkins, MD",
+      "medicalLicense": "LIC-88291-DERM",
+      "isVerified": true,
+      "registrationDate": "2026-01-05T09:00:00.000Z"
+    },
+    {
+      "id": "u-doctor-2",
+      "email": "dermatologist@dermshield.com",
+      "role": "doctor",
+      "name": "Dr. Rajesh Sharma, MBBS, DDVL",
+      "medicalLicense": "LIC-44738-MED",
+      "isVerified": false,
+      "registrationDate": "2026-06-28T14:30:00.000Z"
+    },
+    {
+      "id": "u-admin-1",
+      "email": "admin@dermshield.com",
+      "role": "admin",
+      "name": "Platform Administrator",
+      "registrationDate": "2026-01-01T08:00:00.000Z"
+    }
+  ],
+  "scans": [
+    {
+      "id": "scan-1",
+      "patientId": "u-patient-1",
+      "patientName": "Aniket Kansal",
+      "patientAge": 24,
+      "patientGender": "Male",
+      "imageUrl": "https://images.unsplash.com/photo-1581594693702-fbdc51b2763b?auto=format&fit=crop&q=80&w=600",
+      "predictedClass": "Melanoma",
+      "acronym": "MEL",
+      "confidence": 89.4,
+      "riskLevel": "High",
+      "explanation": "The Swish-activated CNN+ViT ensemble detected pronounced structural asymmetry (A score: 1.8), marked border irregularity (B score: 2.1), and multi-colored variegation (C score: 3.2). Additionally, high-intensity local activation of the Vision Transformer self-attention maps points heavily to an atypical pigment network near the upper margin.",
+      "clinicalDetails": "Atypical melanocytic lesion showing dynamic asymmetry and jagged borders. Grad-CAM shows localized hyper-activation (hotspot weight: 0.95) corresponding to standard Fitzpatrick type II presentation of evolving superficial spreading melanoma. Recommend immediate excisional biopsy with 5mm margins.",
+      "heatmapPoints": [
+        {
+          "x": 48,
+          "y": 52,
+          "radius": 25,
+          "weight": 0.95
+        },
+        {
+          "x": 42,
+          "y": 48,
+          "radius": 15,
+          "weight": 0.82
+        },
+        {
+          "x": 55,
+          "y": 56,
+          "radius": 20,
+          "weight": 0.76
+        }
+      ],
+      "timestamp": "2026-07-01T15:20:00.000Z",
+      "status": "pending_review"
+    },
+    {
+      "id": "scan-2",
+      "patientId": "u-patient-1",
+      "patientName": "Aniket Kansal",
+      "patientAge": 24,
+      "patientGender": "Male",
+      "imageUrl": "https://images.unsplash.com/photo-1612349317150-e413f6a5b16d?auto=format&fit=crop&q=80&w=600",
+      "predictedClass": "Melanocytic Nevus",
+      "acronym": "NV",
+      "confidence": 97.2,
+      "riskLevel": "Low",
+      "explanation": "The neural network shows high confidence (97.2%) for a completely benign melanocytic nevus. On-screen features demonstrate excellent radial symmetry, sharp well-defined borders, and uniform brown pigment network distribution.",
+      "clinicalDetails": "Symmetrical dermoscopic structure. No atypical pigment networks, regression structures, or blue-white veils identified. Regular benign nevus pattern. Grad-CAM activations are uniformly spread with low concentration peak.",
+      "heatmapPoints": [
+        {
+          "x": 50,
+          "y": 50,
+          "radius": 15,
+          "weight": 0.45
+        }
+      ],
+      "timestamp": "2026-06-15T11:10:00.000Z",
+      "status": "reviewed",
+      "doctorVerdict": {
+        "status": "Agree",
+        "notes": "Typical benign compound nevus. Symmetrical. No follow-up or biopsy required unless patient reports rapid changes or itching. Advised annual skin self-checks using ABCDE criteria.",
+        "reviewedAt": "2026-06-16T10:00:00.000Z",
+        "doctorId": "u-doctor-1",
+        "doctorName": "Dr. Sarah Jenkins, MD"
+      }
+    },
+    {
+      "id": "scan-3",
+      "patientId": "u-patient-another",
+      "patientName": "Rohan Verma",
+      "patientAge": 42,
+      "patientGender": "Male",
+      "imageUrl": "https://images.unsplash.com/photo-1576091160550-2173dba999ef?auto=format&fit=crop&q=80&w=600",
+      "predictedClass": "Basal Cell Carcinoma",
+      "acronym": "BCC",
+      "confidence": 78.1,
+      "riskLevel": "High",
+      "explanation": "The model detected a high likelihood of Basal Cell Carcinoma, characterized by local telangiectasias (fine blood vessel lines) and a pearly translucent border structure detected via ViT patch embeddings.",
+      "clinicalDetails": "Nodular basal cell carcinoma candidate. Prominent shiny nodule. Grad-CAM self-attention maps show strong localized focus around translucent micro-structures. Biopsy is highly recommended.",
+      "heatmapPoints": [
+        {
+          "x": 52,
+          "y": 45,
+          "radius": 20,
+          "weight": 0.88
+        },
+        {
+          "x": 58,
+          "y": 48,
+          "radius": 12,
+          "weight": 0.65
+        }
+      ],
+      "timestamp": "2026-06-29T16:45:00.000Z",
+      "status": "reviewed",
+      "doctorVerdict": {
+        "status": "Needs Biopsy",
+        "notes": "Pearly borders with minor telangiectasia. I agree with the model's high risk indicator. I recommend a punch biopsy to confirm Basal Cell Carcinoma. I have requested Rohan to schedule an in-person clinical visit.",
+        "reviewedAt": "2026-06-30T09:15:00.000Z",
+        "doctorId": "u-doctor-1",
+        "doctorName": "Dr. Sarah Jenkins, MD"
+      }
+    }
+  ],
+  "consultations": [
+    {
+      "id": "c-1",
+      "scanId": "scan-1",
+      "patientId": "u-patient-1",
+      "patientName": "Aniket Kansal",
+      "doctorId": "u-doctor-1",
+      "doctorName": "Dr. Sarah Jenkins, MD",
+      "message": "Please review my upper back scan result. The AI predicted Melanoma with High Risk and I am very concerned.",
+      "status": "requested",
+      "timestamp": "2026-07-01T15:25:00.000Z"
+    }
+  ],
+  "logs": [
+    {
+      "id": "log-1",
+      "timestamp": "2026-07-01T15:20:00.000Z",
+      "modelName": "DermShield-CNN-ViT-v1.4",
+      "patientId": "u-patient-1",
+      "imageSizeKb": 342,
+      "durationMs": 1420,
+      "status": "success"
+    },
+    {
+      "id": "log-2",
+      "timestamp": "2026-06-15T11:10:00.000Z",
+      "modelName": "DermShield-CNN-ViT-v1.4",
+      "patientId": "u-patient-1",
+      "imageSizeKb": 184,
+      "durationMs": 1150,
+      "status": "success"
+    },
+    {
+      "id": "log-3",
+      "timestamp": "2026-06-29T16:45:00.000Z",
+      "modelName": "DermShield-CNN-ViT-v1.4",
+      "patientId": "u-patient-another",
+      "imageSizeKb": 295,
+      "durationMs": 1530,
+      "status": "success"
+    }
+  ]
+}

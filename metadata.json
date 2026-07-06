@@ -1,0 +1,10 @@
+{
+  "name": "DermShield AI",
+  "description": "An advanced clinical decision support and screening platform powered by CNN and Vision Transformer models for early skin cancer detection with Grad-CAM explainability, case workflows, and reports.",
+  "requestFramePermissions": [
+    "camera"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
