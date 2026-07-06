@@ -5,6 +5,7 @@ import LandingPage from "./components/LandingPage";
 import PatientDashboard from "./components/PatientDashboard";
 import DoctorDashboard from "./components/DoctorDashboard";
 import AdminDashboard from "./components/AdminDashboard";
+import { NotificationProvider, NotificationBell } from "./lib/NotificationContext";
 
 function AppContent() {
   const { currentUser, loading, signOut } = useAuth();
@@ -54,6 +55,7 @@ function AppContent() {
           {/* Logged in user info + logout */}
           {currentUser ? (
             <div className="flex items-center gap-3">
+              {currentUser.role === "patient" && <NotificationBell />}
               <div className="text-right">
                 <div className="text-xs font-bold text-slate-900 leading-tight">{currentUser.name}</div>
                 <div className="text-[9px] font-bold text-cyan-700 uppercase tracking-wider flex items-center justify-end gap-1 font-mono">
@@ -99,7 +101,9 @@ function AppContent() {
 export default function App() {
   return (
     <AuthProvider>
-      <AppContent />
+      <NotificationProvider>
+        <AppContent />
+      </NotificationProvider>
     </AuthProvider>
   );
 }
