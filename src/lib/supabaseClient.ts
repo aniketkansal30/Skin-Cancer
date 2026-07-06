@@ -633,7 +633,7 @@ export const supabase: any = {
       };
 
       try {
-        let registeredUser;
+        let registeredUser: any;
         try {
           const res = await fetch("/api/auth/register", {
             method: "POST",
@@ -709,7 +709,7 @@ export const supabase: any = {
       };
 
       try {
-        let loggedUser;
+        let loggedUser: any;
         try {
           const res = await fetch("/api/auth/login", {
             method: "POST",

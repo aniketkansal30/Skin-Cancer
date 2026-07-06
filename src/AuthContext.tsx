@@ -55,7 +55,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     // Load existing session on first mount
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
+    supabase.auth.getSession().then(async ({ data: { session } }: { data: { session: Session | null } }) => {
       setSession(session);
       if (session?.user) {
         const profile = await fetchProfile(session.user.id);
@@ -65,7 +65,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
 
     // Listen for login/logout/token-refresh events
-    const { data: listener } = supabase.auth.onAuthStateChange(async (_event, session) => {
+    const { data: listener } = supabase.auth.onAuthStateChange(async (_event: string, session: Session | null) => {
       setSession(session);
       if (session?.user) {
         const profile = await fetchProfile(session.user.id);

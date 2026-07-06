@@ -64,7 +64,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
           table: "notifications",
           filter: `user_id=eq.${currentUser.id}`
         },
-        (payload) => {
+        (payload: any) => {
           const newNotif = payload.new as AppNotification;
           setNotifications((prev) => [newNotif, ...prev].slice(0, 50));
           setToasts((prev) => [...prev, newNotif]);
