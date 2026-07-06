@@ -47,6 +47,12 @@ export default function AdminDashboard({ user }: AdminDashboardProps) {
   const [stats, setStats] = useState<any>(null);
   const [actionSuccess, setActionSuccess] = useState("");
 
+  // Search and Filter states
+  const [userSearch, setUserSearch] = useState("");
+  const [userRoleFilter, setUserRoleFilter] = useState("all");
+  const [logSearch, setLogSearch] = useState("");
+  const [logStatusFilter, setLogStatusFilter] = useState("all");
+
   // Map a Supabase "profiles" row (snake_case) into the User shape the UI expects
   const mapUserRow = (row: any): User => ({
     id: row.id,
@@ -179,6 +185,23 @@ export default function AdminDashboard({ user }: AdminDashboardProps) {
     }));
     exportToCsv(`dermshield_inference_logs_${new Date().toISOString().slice(0, 10)}.csv`, rows);
   };
+
+  const filteredUsers = users.filter((u) => {
+    const matchesSearch = u.name.toLowerCase().includes(userSearch.toLowerCase()) || 
+                          u.email.toLowerCase().includes(userSearch.toLowerCase()) ||
+                          (u.medicalLicense && u.medicalLicense.toLowerCase().includes(userSearch.toLowerCase()));
+    const matchesRole = userRoleFilter === "all" || u.role === userRoleFilter;
+    return matchesSearch && matchesRole;
+  });
+
+  const filteredLogs = logs.filter((l) => {
+    const matchesSearch = l.id.toLowerCase().includes(logSearch.toLowerCase()) || 
+                          l.modelName.toLowerCase().includes(logSearch.toLowerCase()) || 
+                          l.patientId.toLowerCase().includes(logSearch.toLowerCase()) || 
+                          (l.errorMessage && l.errorMessage.toLowerCase().includes(logSearch.toLowerCase()));
+    const matchesStatus = logStatusFilter === "all" || l.status.toLowerCase() === logStatusFilter.toLowerCase();
+    return matchesSearch && matchesStatus;
+  });
 
   return (
     <div className="flex min-h-[calc(100vh-104px)] bg-slate-50 font-sans text-slate-900 w-full" id="admin-console-container">
@@ -319,7 +342,7 @@ export default function AdminDashboard({ user }: AdminDashboardProps) {
         <div className="space-y-6" id="user-verification-tab">
           <div className="bg-white rounded-2xl border border-slate-200/80 shadow-md overflow-hidden">
             <div className="p-5 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
-              <h3 className="text-sm font-bold text-slate-900">Registered Platform Users</h3>
+              <h3 className="text-sm font-bold text-slate-900">Registered Platform Users ({filteredUsers.length} of {users.length})</h3>
               <button
                 onClick={handleExportUsers}
                 disabled={users.length === 0}
@@ -330,74 +353,109 @@ export default function AdminDashboard({ user }: AdminDashboardProps) {
               </button>
             </div>
 
+            {/* Users Search & Filters */}
+            <div className="p-4 bg-slate-50/70 border-b border-slate-100 flex flex-col sm:flex-row gap-3 items-center">
+              <div className="relative flex-1 w-full">
+                <input
+                  type="text"
+                  placeholder="🔍 Search users by name, email, or license..."
+                  value={userSearch}
+                  onChange={(e) => setUserSearch(e.target.value)}
+                  className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-medium outline-none focus:ring-1 focus:ring-teal-500 text-slate-800"
+                />
+              </div>
+              <div className="flex gap-2 w-full sm:w-auto shrink-0">
+                <select
+                  value={userRoleFilter}
+                  onChange={(e) => setUserRoleFilter(e.target.value)}
+                  className="px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold outline-none focus:ring-1 focus:ring-teal-500 text-slate-700 cursor-pointer"
+                >
+                  <option value="all">👥 All Roles</option>
+                  <option value="patient">👤 Patients</option>
+                  <option value="doctor">🩺 Doctors</option>
+                  <option value="admin">🔑 Admins</option>
+                </select>
+                {(userSearch !== "" || userRoleFilter !== "all") && (
+                  <button
+                    onClick={() => { setUserSearch(""); setUserRoleFilter("all"); }}
+                    className="text-[10px] font-extrabold text-teal-600 hover:text-teal-800 underline cursor-pointer"
+                  >
+                    Clear Filters
+                  </button>
+                )}
+              </div>
+            </div>
+
             <div className="divide-y divide-slate-100">
-              {users.map((u) => (
-                <div key={u.id} className="p-5 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 hover:bg-slate-50/50 transition-all">
-                  
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2">
-                      <strong className="text-xs font-bold text-slate-900">{u.name}</strong>
-                      <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full capitalize ${
-                        u.role === "admin" 
-                          ? "bg-slate-900 text-white" 
-                          : u.role === "doctor" 
-                            ? "bg-teal-50 text-teal-800 border border-teal-100" 
-                            : "bg-cyan-50 text-cyan-800 border border-cyan-100"
-                      }`}>
-                        {u.role}
-                      </span>
-                    </div>
-                    <div className="text-[10px] text-slate-400 font-mono">
-                      Email: {u.email} • ID: {u.id.slice(0, 8)} • Joined: {new Date(u.registrationDate).toLocaleDateString()}
-                    </div>
-                    {u.role === "doctor" && (
-                      <div className="text-[10px] text-slate-500 font-semibold flex items-center gap-1">
-                        <Award className="h-3.5 w-3.5 text-slate-400" />
-                        <span>License Register ID: {u.medicalLicense || "LIC-PENDING-MED"}</span>
+              {filteredUsers.length > 0 ? (
+                filteredUsers.map((u) => (
+                  <div key={u.id} className="p-5 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 hover:bg-slate-50/50 transition-all">
+                    
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <strong className="text-xs font-bold text-slate-900">{u.name}</strong>
+                        <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full capitalize ${
+                          u.role === "admin" 
+                            ? "bg-slate-900 text-white" 
+                            : u.role === "doctor" 
+                              ? "bg-teal-50 text-teal-800 border border-teal-100" 
+                              : "bg-cyan-50 text-cyan-800 border border-cyan-100"
+                        }`}>
+                          {u.role}
+                        </span>
                       </div>
-                    )}
+                      <div className="text-[10px] text-slate-400 font-mono">
+                        Email: {u.email} • ID: {u.id.slice(0, 8)} • Joined: {new Date(u.registrationDate).toLocaleDateString()}
+                      </div>
+                      {u.role === "doctor" && (
+                        <div className="text-[10px] text-slate-500 font-semibold flex items-center gap-1">
+                          <Award className="h-3.5 w-3.5 text-slate-400" />
+                          <span>License Register ID: {u.medicalLicense || "LIC-PENDING-MED"}</span>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-3 shrink-0">
+                      {u.role === "doctor" && (
+                        <>
+                          {u.isVerified ? (
+                            <div className="flex items-center gap-2">
+                              <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-lg flex items-center gap-1">
+                                <CheckCircle className="h-3.5 w-3.5 text-emerald-500" />
+                                <span>Verified Physician</span>
+                              </span>
+                              <button
+                                onClick={() => verifyDoctorLicense(u.id, false)}
+                                className="px-2.5 py-1 border border-slate-200 hover:bg-slate-50 text-[10px] text-slate-600 font-bold rounded-lg cursor-pointer"
+                              >
+                                Revoke
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-2">
+                              <span className="text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-2.5 py-1 rounded-lg flex items-center gap-1">
+                                <ShieldAlert className="h-3.5 w-3.5 text-amber-500" />
+                                <span>Pending Verification</span>
+                              </span>
+                              <button
+                                onClick={() => verifyDoctorLicense(u.id, true)}
+                                className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white text-[10px] font-bold rounded-lg shadow-sm cursor-pointer"
+                              >
+                                Approve & Verify License
+                              </button>
+                            </div>
+                          )}
+                        </>
+                      )}
+                    </div>
+
                   </div>
-
-                  <div className="flex items-center gap-3 shrink-0">
-                    {u.role === "doctor" && (
-                      <>
-                        {u.isVerified ? (
-                          <div className="flex items-center gap-2">
-                            <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-lg flex items-center gap-1">
-                              <CheckCircle className="h-3.5 w-3.5 text-emerald-500" />
-                              <span>Verified Physician</span>
-                            </span>
-                            <button
-                              onClick={() => verifyDoctorLicense(u.id, false)}
-                              className="px-2.5 py-1 border border-slate-200 hover:bg-slate-50 text-[10px] text-slate-600 font-bold rounded-lg cursor-pointer"
-                            >
-                              Revoke
-                            </button>
-                          </div>
-                        ) : (
-                          <div className="flex items-center gap-2">
-                            <span className="text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-2.5 py-1 rounded-lg flex items-center gap-1">
-                              <ShieldAlert className="h-3.5 w-3.5 text-amber-500" />
-                              <span>Pending Verification</span>
-                            </span>
-                            <button
-                              onClick={() => verifyDoctorLicense(u.id, true)}
-                              className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white text-[10px] font-bold rounded-lg shadow-sm cursor-pointer"
-                            >
-                              Approve & Verify License
-                            </button>
-                          </div>
-                        )}
-                      </>
-                    )}
-                  </div>
-
-                </div>
-              ))}
-
-              {users.length === 0 && (
-                <div className="p-12 text-center text-slate-400 text-xs">
-                  No registered users found yet.
+                ))
+              ) : (
+                <div className="p-12 text-center text-slate-400 text-xs font-semibold">
+                  {users.length > 0 
+                    ? "No registered platform users match your search criteria or role filters."
+                    : "No registered users found yet."}
                 </div>
               )}
             </div>
@@ -412,7 +470,7 @@ export default function AdminDashboard({ user }: AdminDashboardProps) {
         <div className="space-y-6" id="telemetry-logs-tab">
           <div className="bg-white rounded-2xl border border-slate-200/80 shadow-md overflow-hidden">
             <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
-              <h3 className="text-sm font-bold text-slate-900">Ensemble Model Execution Trace</h3>
+              <h3 className="text-sm font-bold text-slate-900">Ensemble Model Execution Trace ({filteredLogs.length} of {logs.length})</h3>
               <button
                 onClick={handleExportLogs}
                 disabled={logs.length === 0}
@@ -423,9 +481,41 @@ export default function AdminDashboard({ user }: AdminDashboardProps) {
               </button>
             </div>
 
-            {logs.length > 0 ? (
+            {/* Logs Search & Filters */}
+            <div className="p-4 bg-slate-50/70 border-b border-slate-100 flex flex-col sm:flex-row gap-3 items-center">
+              <div className="relative flex-1 w-full">
+                <input
+                  type="text"
+                  placeholder="🔍 Search log trace by model, inference ID, patient, or error..."
+                  value={logSearch}
+                  onChange={(e) => setLogSearch(e.target.value)}
+                  className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-medium outline-none focus:ring-1 focus:ring-teal-500 text-slate-800"
+                />
+              </div>
+              <div className="flex gap-2 w-full sm:w-auto shrink-0">
+                <select
+                  value={logStatusFilter}
+                  onChange={(e) => setLogStatusFilter(e.target.value)}
+                  className="px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold outline-none focus:ring-1 focus:ring-teal-500 text-slate-700 cursor-pointer"
+                >
+                  <option value="all">⚡ All Statuses</option>
+                  <option value="success">🟢 Success</option>
+                  <option value="error">🔴 Error</option>
+                </select>
+                {(logSearch !== "" || logStatusFilter !== "all") && (
+                  <button
+                    onClick={() => { setLogSearch(""); setLogStatusFilter("all"); }}
+                    className="text-[10px] font-extrabold text-teal-600 hover:text-teal-800 underline cursor-pointer"
+                  >
+                    Clear Filters
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {filteredLogs.length > 0 ? (
               <div className="font-mono text-xs divide-y divide-slate-100">
-                {logs.map((log) => (
+                {filteredLogs.map((log) => (
                   <div key={log.id} className="p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 hover:bg-slate-50/50 transition-all">
                     
                     <div className="space-y-1">
@@ -436,7 +526,7 @@ export default function AdminDashboard({ user }: AdminDashboardProps) {
                         <span className="text-[11px] text-slate-500 font-semibold">{log.modelName}</span>
                       </div>
 
-                      <div className="text-[10px] text-slate-500">
+                      <div className="text-[10px] text-slate-500 font-sans">
                         Timestamp: {new Date(log.timestamp).toLocaleString()} • PatientRef: {log.patientId?.slice(0, 8) || "N/A"}
                       </div>
 
@@ -463,7 +553,9 @@ export default function AdminDashboard({ user }: AdminDashboardProps) {
               </div>
             ) : (
               <div className="p-12 text-center text-slate-400 text-xs font-mono">
-                No active neural network pipeline executions traced in log buffer.
+                {logs.length > 0 
+                  ? "No pipeline execution logs match your search queries or status filters."
+                  : "No active neural network pipeline executions traced in log buffer."}
               </div>
             )}
           </div>

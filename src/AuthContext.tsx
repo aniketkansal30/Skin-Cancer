@@ -10,6 +10,7 @@ interface AuthContextType {
   signUp: (email: string, password: string, name: string, role: UserRole) => Promise<{ error: string | null }>;
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
+  updateProfile: (updates: Partial<User>) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -39,7 +40,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       name: data.name,
       medicalLicense: data.medical_license || undefined,
       isVerified: data.is_verified || false,
-      registrationDate: data.registration_date
+      registrationDate: data.registration_date,
+      age: data.age,
+      gender: data.gender,
+      phone: data.phone,
+      emergencyContact: data.emergency_contact,
+      medicalHistory: data.medical_history,
+      specialty: data.specialty,
+      clinicName: data.clinic_name,
+      dob: data.dob,
+      avatarUrl: data.avatar_url
     };
   };
 
@@ -97,8 +107,42 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setSession(null);
   };
 
+  const updateProfile = async (updates: Partial<User>) => {
+    if (!currentUser) return;
+    
+    // Map properties to match profiles snake_case keys in DB if needed
+    const dbUpdates: any = {
+      ...updates,
+      medical_license: updates.medicalLicense,
+      is_verified: updates.isVerified,
+      emergency_contact: updates.emergencyContact,
+      medical_history: updates.medicalHistory,
+      clinic_name: updates.clinicName,
+      avatar_url: updates.avatarUrl
+    };
+    
+    // Clean undefined keys
+    Object.keys(dbUpdates).forEach(key => {
+      if (dbUpdates[key] === undefined) {
+        delete dbUpdates[key];
+      }
+    });
+
+    const { error } = await supabase
+      .from("profiles")
+      .update(dbUpdates)
+      .eq("id", currentUser.id);
+
+    if (!error) {
+      const profile = await fetchProfile(currentUser.id);
+      setCurrentUser(profile);
+    } else {
+      console.error("Failed to update profile", error);
+    }
+  };
+
   return (
-    <AuthContext.Provider value={{ currentUser, session, loading, signUp, signIn, signOut }}>
+    <AuthContext.Provider value={{ currentUser, session, loading, signUp, signIn, signOut, updateProfile }}>
       {children}
     </AuthContext.Provider>
   );

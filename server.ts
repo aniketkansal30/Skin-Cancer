@@ -489,6 +489,172 @@ app.get("/api/admin/stats", (req, res) => {
   });
 });
 
+// -------------------------------------------------------------
+// AI Chatbot / Assistant endpoint
+// -------------------------------------------------------------
+app.post("/api/chat", async (req, res) => {
+  const { message, history, userId, userRole, userName } = req.body;
+
+  if (!message) {
+    return res.status(400).json({ error: "Message is required." });
+  }
+
+  const userQuery = message.toLowerCase();
+  const db = loadDb();
+
+  try {
+    if (hasRealKey) {
+      console.log(`Calling Gemini API for user chat request from ${userName} (${userRole})...`);
+      const genAI = getGeminiClient();
+
+      const chatInstruction = `You are DermShield AI Assistant. You assist Patients, Doctors and Admin users of the DermShield AI platform.
+You are an educational and platform assistant. Never claim to be a licensed dermatologist. Never provide a definitive diagnosis or prescribe medications.
+
+Context of active user:
+- Name: ${userName}
+- Role: ${userRole}
+- ID: ${userId}
+
+Response Rules:
+• Be accurate, clear, and professional.
+• Be calm and empathetic.
+• Explain medical terms simply.
+• Ask follow-up questions if details are missing.
+• Recommend a dermatologist for suspicious lesions.
+• Never exaggerate certainty.
+• Clearly distinguish AI screening from clinical diagnosis.
+• Always end medical guidance with: "This information is for educational purposes only and does not replace professional medical advice."
+
+DermShield AI Platform Knowledge:
+- Scans: Patients can upload a cutaneous macro picture, pin it on the interactive Body Map, see CNN+ViT predictions (MEL, SCC, BCC, etc.) with Grad-CAM activation heatmaps.
+- Tracking: Patients can nickname lesions and track chronological progression timelines.
+- Consultations: Patients can request consultations with registered doctors.
+- Doctors: Verify scans, review heatmaps, agree/disagree, recommend Biopsy/Follow-up, schedule consultations.
+- Admins: Verify registered doctor medical licenses, check system performance logs, export aggregate CSV reports.
+
+Emergency Policy:
+For severe bleeding, rapidly spreading infection, breathing difficulty, or unconsciousness, instruct the user to seek immediate emergency care.
+
+Out of Scope:
+Politely refuse requests unrelated to DermShield AI or skin health.`;
+
+      let contents: any[] = [];
+      if (history && Array.isArray(history)) {
+        // Map user and assistant turns
+        contents = history.map((h: any) => ({
+          role: h.role === "user" ? "user" : "model",
+          parts: [{ text: h.text }]
+        }));
+        // Append active message
+        contents.push({
+          role: "user",
+          parts: [{ text: message }]
+        });
+      } else {
+        contents = [{ role: "user", parts: [{ text: message }] }];
+      }
+
+      const chatResponse = await genAI.models.generateContent({
+        model: "gemini-3.5-flash",
+        contents,
+        config: {
+          systemInstruction: chatInstruction,
+          temperature: 0.7,
+          maxOutputTokens: 800
+        }
+      });
+
+      const reply = chatResponse.text || "I apologize, but I could not formulate a response at the moment.";
+      return res.json({ reply: reply.trim() });
+    } else {
+      // -------------------------------------------------------------
+      // High-Fidelity Educational Chatbot Simulator
+      // -------------------------------------------------------------
+      console.log("GEMINI_API_KEY is not configured. DermShield AI chatbot operating in educational matching simulator fallback.");
+      
+      let reply = "";
+
+      // Check emergency symptoms
+      if (
+        userQuery.includes("bleeding") && (userQuery.includes("severe") || userQuery.includes("heavy") || userQuery.includes("uncontrolled")) ||
+        userQuery.includes("breathing") || userQuery.includes("chest pain") || userQuery.includes("emergency")
+      ) {
+        reply = "🚨 **Emergency Medical Warning:** If you are experiencing severe bleeding, rapidly spreading infection, breathing difficulties, sudden severe pain, or another life-threatening symptom, please seek **immediate emergency medical attention** or call your local emergency number (e.g., 911). Do not delay care by seeking online information.";
+        return res.json({ reply });
+      }
+
+      // Exact matching or semantic matching rules
+      if (userQuery.includes("skin cancer") || userQuery.includes("cancer type")) {
+        reply = "Skin cancer is the out-of-control growth of abnormal skin cells, typically triggered by ultraviolet (UV) radiation from sun exposure or tanning beds. The three most common types are:\n\n- **Melanoma (MEL)**: The most serious type which begins in pigment-producing melanocytes. Often looks like an atypical asymmetrical mole.\n- **Basal Cell Carcinoma (BCC)**: The most frequent type, presenting as a pearly translucent bump or pink patch that doesn't heal.\n- **Squamous Cell Carcinoma (SCC)**: Characterized by a scaly, firm red nodule, sore, or persistent ulcer.\n\nEarly detection is the key to successful treatment. Monthly skin self-checks are recommended.\n\n_This information is for educational purposes only and does not replace professional medical advice._";
+      } else if (userQuery.includes("abcde") || userQuery.includes("asymmetry") || userQuery.includes("warning sign")) {
+        reply = "The **ABCDE rule** is a globally recognized dermatological screening guide to evaluate suspicious moles or cutaneous spots:\n\n- **A for Asymmetry**: One half of the spot or mole does not visually match the other half.\n- **B for Border**: The borders are irregular, jagged, notched, ragged, or blurred.\n- **C for Colour**: The color is uneven with varying shades of brown, black, tan, red, pink, or white.\n- **D for Diameter**: The spot is larger than 6 millimeters across (about the size of a pencil eraser), though melanomas can sometimes be smaller.\n- **E for Evolving**: The mole is changing in size, shape, color, thickness, or shows new symptoms like itching or bleeding.\n\nAny mole matching one or more of these parameters should be examined physically by a doctor.\n\n_This information is for educational purposes only and does not replace professional medical advice._";
+      } else if (userQuery.includes("grad-cam") || userQuery.includes("grad cam") || userQuery.includes("activation mapping")) {
+        reply = "Our **Grad-CAM (Gradient-weighted Class Activation Mapping)** technology is an advanced explainable AI feature. When you upload a scan, the CNN+ViT model computes which pixel regions contributed most heavily to the classification prediction.\n\nIn the interactive viewer, this is shown as a colorful thermal focus overlay (ranging from calm blue to active yellow and hot red). It allows doctors and patients to visualize exactly what features (such as edge texture, pigmentation irregularity, or border jaggedness) the model focused on, rather than acting as an untraceable 'black box'.\n\n_This information is for educational purposes only and does not replace professional medical advice._";
+      } else if (userQuery.includes("supabase") || userQuery.includes("database") || userQuery.includes("db")) {
+        reply = "DermShield AI integrates **Supabase** for secure, real-time database cloud persistence. This powers:\n\n- **Authentication & Profiles**: Secure role-based credentials for Patients, Doctors, and Administrators.\n- **Real-Time Notifications**: Instant synchronization when an analysis result is verified, a consultation is scheduled, or a referral is issued.\n- **Durable Storage**: Maintaining long-term records of patient scans, Grad-CAM maps, chronological tracking lines, and audit logs.\n\n_This information is for educational purposes only and does not replace professional medical advice._";
+      } else if (userQuery.includes("cnn") || userQuery.includes("transformer") || userQuery.includes("neural network") || userQuery.includes("pipeline") || userQuery.includes("vit")) {
+        reply = "DermShield AI uses a hybrid **Ensemble Neural Network Pipeline** combining **Convolutional Neural Networks (CNN)** and **Vision Transformers (ViT)**:\n\n- **CNN (Local Feature Extractor)**: Excels at capturing fine-grained local patterns such as borders, texture changes, scale, and color variation.\n- **Vision Transformer (Global Contextual Encoder)**: Uses self-attention mechanisms to capture global anatomical relationships across the entire lesion surface.\n\nThis hybrid pipeline delivers robust representation learning and significantly outperforms traditional individual models in diagnostic accuracy.\n\n_This information is for educational purposes only and does not replace professional medical advice._";
+      } else if (userQuery.includes("explainable") || userQuery.includes("xai")) {
+        reply = "**Explainable AI (XAI)** is a core pillar of DermShield AI. In clinical applications, black-box predictions undermine physician trust and fail to educate patients.\n\nBy implementing Grad-CAM visual heatmaps, confidence ratings, and uncertainty factors, DermShield makes its inner workings transparent. Doctors can verify that the AI is attending to clinical biomarkers rather than image artifacts (like marker lines or body hair), and patients can learn how to monitor relevant spots.\n\n_This information is for educational purposes only and does not replace professional medical advice._";
+      } else if (userQuery.includes("difference between confidence") || userQuery.includes("confidence vs uncertainty") || userQuery.includes("confidence versus") || userQuery.includes("difference between")) {
+        reply = "While they seem similar, **Model Confidence** and **Prediction Uncertainty** measure separate attributes:\n\n- **Model Confidence Score**: Represents how strongly the neural network favors the predicted label (e.g., 94% Melanoma) over other alternatives based on textbook features.\n- **Prediction Uncertainty**: Measures the reliability or margin of error of that prediction. High uncertainty indicates that the image was out-of-distribution, blurry, poorly lit, or highly atypical, meaning the prediction should be treated with extreme skepticism.\n\n_This information is for educational purposes only and does not replace professional medical advice._";
+      } else if (userQuery.includes("viva") || userQuery.includes("preparation") || userQuery.includes("qa") || userQuery.includes("questions")) {
+        reply = "Here is a **DermShield AI Viva Cheat Sheet** for your exam preparation:\n\n1. **Why CNN + ViT?** CNN extracts local details (borders, color); ViT models global spatial correlations. Together, they achieve optimal representation.\n2. **What is Grad-CAM?** Gradient-weighted Class Activation Mapping. It computes gradients of target scores with respect to the last convolutional layer, generating visual heatmaps.\n3. **Why Supabase?** Provides secure cloud storage, automated schema migrations, real-time client subscription channels, and simple JWT session management.\n4. **Why track lesions chronologically?** It addresses the 'E' in ABCDE (Evolving) by plotting diagnostic histories and visual changes over weeks or months.\n\n_This information is for educational purposes only and does not replace professional medical advice._";
+      } else if (userQuery.includes("advantage") || userQuery.includes("benefit") || userQuery.includes("traditional")) {
+        reply = "DermShield AI provides several game-changing **advantages over traditional screening methods**:\n\n- **Explainability First**: Unlike traditional 'black-box' systems, we provide visual heatmaps and uncertainty factors.\n- **Longitudinal Tracking**: We compile visual timelines instead of isolated single-session scans, making evolution apparent.\n- **Clinical Ingress**: It bridges the gap between home self-checks and clinical review with built-in doctor queues and referral paths.\n\n_This information is for educational purposes only and does not replace professional medical advice._";
+      } else if (userQuery.includes("future scope") || userQuery.includes("future") || userQuery.includes("growth")) {
+        reply = "The **future scope of DermShield AI** includes:\n\n- **Dermoscopic Attachment Calibration**: Support for smartphone lens attachments to standardize polarization.\n- **Multi-Modal Integration**: Correlating visual scans with genomic risk scoring and environmental UV index patterns.\n- **Mobile Native Integrations**: Launching native iOS/Android apps with automated edge-focus guidance during camera upload.\n\n_This information is for educational purposes only and does not replace professional medical advice._";
+      } else if (userQuery.includes("troubleshoot") || userQuery.includes("fails") || userQuery.includes("error") || userQuery.includes("problem") || userQuery.includes("failed") || userQuery.includes("delay")) {
+        reply = "Here is the **DermShield Troubleshooting Guide**:\n\n- **Image Upload Fails**: Ensure your image is a valid PNG or JPEG under 10MB. Avoid highly blurry photos or pictures with high glare.\n- **License Pending**: If you are a doctor and cannot review scans, an Admin must manually verify your profile under 'User Management'.\n- **Notification Delays**: Ensure you are logged in and have an active, stable internet connection to establish the database socket subscription.\n- **Data Not Refreshing**: Try clearing your browser cache or performing a hard refresh (Ctrl+F5) to clear cached queries.\n\n_This information is for educational purposes only and does not replace professional medical advice._";
+      } else if (userQuery.includes("body map") || userQuery.includes("location") || userQuery.includes("anatomical")) {
+        reply = "The **Interactive 3D Body Map** is used to record the anatomical location of skin lesions. When you submit a scan, pinning it on the body map allows DermShield to distinguish between different spots (e.g., chest vs. leg) and automatically pair future scans to compile distinct progression timelines.\n\n_This information is for educational purposes only and does not replace professional medical advice._";
+      } else if (userQuery.includes("notification") || userQuery.includes("alerts")) {
+        reply = "DermShield features a real-time **Notification Center** that instantly alerts:\n\n- **Patients** when a doctor posts a clinical review verdict, schedules a consultation, or issues a referral.\n- **Doctors** when a new patient case enters their clinic queue or a consultation is booked.\n- **Admins** when a new medical provider joins the platform waiting for registration verification.\n\n_This information is for educational purposes only and does not replace professional medical advice._";
+      } else if (userQuery.includes("log") || userQuery.includes("trace")) {
+        reply = "We maintain granular **Activity and Telemetry Logs**:\n\n- **Security Audit Logs**: Track authentication changes, metadata updates, and diagnostic CSV exports.\n- **Neural Pipeline Trace Logs**: Record model latency metrics, exact inference outputs, and confidence distributions for system observability.\n\n_This information is for educational purposes only and does not replace professional medical advice._";
+      } else if (userQuery.includes("report") || userQuery.includes("csv") || userQuery.includes("export")) {
+        reply = "DermShield supports comprehensive reporting options:\n\n- **Individual PDF Reports**: Patients and Doctors can compile individual scans with Grad-CAM overlays into diagnostic reports.\n- **Admin CSV Exports**: Administrators can download aggregate anonymized telemetry statistics for audit logs and platform verification records.\n\n_This information is for educational purposes only and does not replace professional medical advice._";
+      } else if (userQuery.includes("referral") || userQuery.includes("refer")) {
+        reply = "Our integrated **Referral Workflow** allows general practitioners or reviewing doctors to escalate high-risk cases to specialists. Referrals include reason, clinical urgency level, timeline history, and notes to ensure continuity of care.\n\n_This information is for educational purposes only and does not replace professional medical advice._";
+      } else if (userQuery.includes("analytics") || userQuery.includes("dashboard")) {
+        reply = "The dashboards provide customized statistics:\n\n- **Patient Dashboard**: Tracks lesion counts, sun safety index, and monthly self-exam progress.\n- **Doctor Dashboard**: Displays queue counts, diagnostic category ratios, and pending cases.\n- **Admin Dashboard**: Visualizes global user distributions, model execution time, and system trace health.\n\n_This information is for educational purposes only and does not replace professional medical advice._";
+      } else if (userQuery.includes("profile") || userQuery.includes("password") || userQuery.includes("account")) {
+        reply = "In the **Profile Management** tab, users can update passwords, input emergency contact details, update doctor medical credentials, and view account roles securely.\n\n_This information is for educational purposes only and does not replace professional medical advice._";
+      } else if (userQuery.includes("confidence") || userQuery.includes("uncertainty") || userQuery.includes("score")) {
+        reply = "On DermShield AI, every analysis features two vital model metrics:\n\n- **Model Confidence Score**: A percentage indicating how closely the visual features in the image align with the predicted class (e.g., Melanocytic Nevus). Highly clear, textbook presentations yield high confidence.\n- **Uncertainty Factor**: High uncertainty highlights that the model's reliability is lower for that specific scan, possibly due to poor lighting, low resolution, or atypical lesion features.\n\nRemember: Model confidence represents statistical match strength, not diagnostic truth. Even a 99% confident result should be clinically verified by a professional if suspicious.\n\n_This information is for educational purposes only and does not replace professional medical advice._";
+      } else if (userQuery.includes("replace") || userQuery.includes("substitute") || userQuery.includes("licensed")) {
+        reply = "No. **DermShield AI cannot and does not replace a licensed dermatologist, doctor, or clinical specialist.** \n\nDermShield AI is purely a clinical decision support and patient education screening platform. AI calculations do not constitute a diagnostic medical verdict. To verify skin lesions, a physician must perform physical dermoscopy, take a detailed clinical history, and perform a biopsy with pathology examination if necessary.\n\n_This information is for educational purposes only and does not replace professional medical advice._";
+      } else if (userQuery.includes("upload") || userQuery.includes("scan") || userQuery.includes("new scan") || userQuery.includes("work")) {
+        reply = "To use the DermShield AI screening system:\n\n1. Navigate to the **New Scan** tab on your Patient Dashboard.\n2. Click the upload box to select or drag-and-drop a close-up, clear macro photo of the skin lesion.\n3. Specify patient demographic information (age and gender) to assist metadata correlation.\n4. Click on our interactive **3D Body Map** to pin the exact anatomical location where the lesion is located.\n5. Click **Submit for AI Analysis** to run the CNN+Vision Transformer ensemble model.\n\nOnce completed, your report, explainability Grad-CAM map, and patient description will be instantly available in your scan history.\n\n_This information is for educational purposes only and does not replace professional medical advice._";
+      } else if (userQuery.includes("track") || userQuery.includes("lesion") || userQuery.includes("chronology") || userQuery.includes("nickname")) {
+        reply = "Our **Lesion Tracking** workflow allows you to monitor the evolution of specific spots over long periods. When you submit a scan, you can assign it to an existing lesion nickname or create a new one.\n\nBy grouping repeated scans under the same nickname, DermShield compiles a **Lesion Chronology & Progression Timeline**. You can visually track size evolution, changes in prediction categories, and monitor clinical changes to identify the 'E' (Evolving) warning sign easily.\n\n_This information is for educational purposes only and does not replace professional medical advice._";
+      } else if (userQuery.includes("license") || userQuery.includes("verify") || userQuery.includes("approve")) {
+        reply = "We maintain a secure, professional workspace. When a doctor registers on our platform, they must input their unique Medical License Register ID. All registered doctors are set as pending until a platform Administrator manually reviews their credentials against official medical records.\n\nOnce verified, the doctor can access the Doctor Dashboard to review patient cases, post verdicts, and schedule consultations.\n\n_This information is for educational purposes only and does not replace professional medical advice._";
+      } else if (userQuery.includes("melanoma")) {
+        reply = "Melanoma is the most serious form of skin cancer, originating in the melanocytes (cells that produce melanin pigment). It can develop anywhere on the body, including sun-exposed areas or even under fingernails.\n\nWarning signs include moles that display any of the **ABCDE characteristics** (Asymmetry, Border irregularity, multi-colored variegation, Diameter >6mm, or rapidly Evolving). Early detection through digital screening and prompt dermatologist referral is crucial for complete surgical cure.\n\n_This information is for educational purposes only and does not replace professional medical advice._";
+      } else if (userQuery.includes("admin") || userQuery.includes("stats") || userQuery.includes("logs")) {
+        reply = "In the **Admin Dashboard**, platform administrators can oversee user accounts, approve pending doctor registrations, inspect system performance logs, and review aggregate statistics such as total scans, risk distribution ratios, and AI-Doctor alignment rate trends.\n\n_This information is for educational purposes only and does not replace professional medical advice._";
+      } else {
+        // Generically helpful matching response that cites clinical support
+        reply = `Thank you for asking! As the **DermShield AI Assistant**, I can help you with educational information about skin health and platform features.
+
+Based on your query "${message}", I would like to share that keeping close track of changing spots, protecting your skin from intensive UV rays (using SPF 30+ sunscreen), and conducting monthly self-skin exams are the most proactive steps you can take for skin cancer prevention.
+
+If you are asking about a specific mole or atypical spot, please use our **New Scan** section to run a decision support analysis, or consult a board-certified dermatologist for a clinical diagnosis.
+
+Is there a specific topic, like the **ABCDE rule**, **Grad-CAM explainability**, or **Lesion Tracking** that you would like me to detail further?
+
+_This information is for educational purposes only and does not replace professional medical advice._`;
+      }
+
+      return res.json({ reply });
+    }
+  } catch (error: any) {
+    console.error("Chatbot processing failure:", error);
+    res.status(500).json({ error: "Failed to process chat query: " + error.message });
+  }
+});
+
 // POST predict lesion scan image
 app.post("/api/predict", async (req, res) => {
   const { imageBase64, patientId, patientName, patientAge, patientGender } = req.body;

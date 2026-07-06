@@ -1,14 +1,17 @@
 import React, { useState, useEffect } from "react";
 import { 
   ClipboardList, CheckCircle, AlertTriangle, Users, BarChart2, 
-  ChevronRight, ArrowLeft, Send, ThumbsUp, RefreshCw, Layers, Sliders
+  ChevronRight, ArrowLeft, Send, ThumbsUp, RefreshCw, Layers, Sliders, Forward,
+  Terminal, User as UserIcon, Clock, Settings, ArrowUpRight, Activity, FileText, Phone,
+  TrendingUp, ExternalLink
 } from "lucide-react";
 import { User, ScanResult, Consultation } from "../types";
 import GradCamCanvas from "./GradCamCanvas";
+import DoctorProfileTab from "./DoctorProfileTab";
 import { supabase } from "../lib/supabaseClient";
 import { 
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, 
-  Tooltip, Legend, PieChart, Pie, Cell 
+  Tooltip, Legend, PieChart, Pie, Cell, LineChart, Line, CartesianGrid
 } from "recharts";
 
 interface DoctorDashboardProps {
@@ -18,14 +21,27 @@ interface DoctorDashboardProps {
 export default function DoctorDashboard({ user }: DoctorDashboardProps) {
   const [scans, setScans] = useState<ScanResult[]>([]);
   const [consultations, setConsultations] = useState<Consultation[]>([]);
-  const [activeTab, setActiveTab] = useState<"queue" | "history" | "analytics" | "consultations">("queue");
+  const [referrals, setReferrals] = useState<any[]>([]);
+  const [auditLogs, setAuditLogs] = useState<any[]>([]);
+  const [activeTab, setActiveTab] = useState<"queue" | "history" | "analytics" | "consultations" | "referrals" | "logs" | "profile">("queue");
   const [selectedScan, setSelectedScan] = useState<ScanResult | null>(null);
+
+  // Search and Filter states
+  const [queueSearch, setQueueSearch] = useState("");
+  const [queueRiskFilter, setQueueRiskFilter] = useState("all");
+  const [archiveSearch, setArchiveSearch] = useState("");
+  const [archiveRiskFilter, setArchiveRiskFilter] = useState("all");
 
   // Verdict Form State
   const [verdict, setVerdict] = useState<"Agree" | "Disagree" | "Needs Biopsy" | "Needs Follow-up">("Agree");
   const [verdictNotes, setVerdictNotes] = useState("");
   const [submittingVerdict, setSubmittingVerdict] = useState(false);
   const [verdictSuccess, setVerdictSuccess] = useState(false);
+  
+  // Oncology/Surgical Referral state
+  const [needReferral, setNeedReferral] = useState(false);
+  const [referringClinic, setReferringClinic] = useState("");
+  const [referralNotes, setReferralNotes] = useState("");
 
   // Grad-CAM Controls
   const [showGradCam, setShowGradCam] = useState(true);
@@ -48,7 +64,12 @@ export default function DoctorDashboard({ user }: DoctorDashboardProps) {
     heatmapPoints: row.heatmap_points || [],
     timestamp: row.created_at,
     status: row.status,
-    doctorVerdict: row.doctor_verdict || undefined
+    doctorVerdict: row.doctor_verdict || undefined,
+    bodyLocation: row.body_location,
+    lesionId: row.lesion_id,
+    uncertaintyScore: row.uncertainty_score ? Number(row.uncertainty_score) : undefined,
+    needsMandatoryReview: row.needs_mandatory_review,
+    contributingFactors: row.contributing_factors || undefined
   });
 
   const mapConsultationRow = (row: any): Consultation => ({
@@ -84,7 +105,14 @@ export default function DoctorDashboard({ user }: DoctorDashboardProps) {
         .order("created_at", { ascending: false });
 
       if (scansError) throw scansError;
-      setScans((scansData || []).map(mapScanRow));
+      const mappedScans = (scansData || []).map(mapScanRow);
+      setScans(mappedScans);
+
+      // Audit logs: scans reviewed by this doctor
+      const reviewedScans = mappedScans.filter(
+        (s) => s.status === "reviewed" && s.doctorVerdict?.doctorId === user.id
+      );
+      setAuditLogs(reviewedScans);
 
       // Consultations specifically routed to this doctor
       const { data: consultsData, error: consultsError } = await supabase
@@ -95,6 +123,16 @@ export default function DoctorDashboard({ user }: DoctorDashboardProps) {
 
       if (consultsError) throw consultsError;
       setConsultations((consultsData || []).map(mapConsultationRow));
+
+      // Referrals made by this doctor
+      const { data: referralsData, error: referralsError } = await supabase
+        .from("referrals")
+        .select("*")
+        .eq("doctor_id", user.id)
+        .order("created_at", { ascending: false });
+      if (!referralsError) {
+        setReferrals(referralsData || []);
+      }
     } catch (err) {
       console.error("Failed to load doctor data", err);
     }
@@ -111,7 +149,8 @@ export default function DoctorDashboard({ user }: DoctorDashboardProps) {
 
     setSubmittingVerdict(true);
     try {
-      const { error } = await supabase
+      // 1. Update the Scan verdict in "scans" table
+      const { error: updateError } = await supabase
         .from("scans")
         .update({
           status: "reviewed",
@@ -125,13 +164,37 @@ export default function DoctorDashboard({ user }: DoctorDashboardProps) {
         })
         .eq("id", selectedScan.id);
 
-      if (error) throw error;
+      if (updateError) throw updateError;
+
+      // 2. If Oncology/Surgical referral is requested, insert into "referrals" table
+      if (needReferral) {
+        const referralId = "ref-" + Math.random().toString(36).substr(2, 9);
+        const { error: referralError } = await supabase
+          .from("referrals")
+          .insert({
+            id: referralId,
+            patient_id: selectedScan.patientId,
+            patient_name: selectedScan.patientName,
+            doctor_id: user.id,
+            doctor_name: user.name,
+            scan_id: selectedScan.id,
+            referring_clinic: referringClinic.trim() || "National Dermatopathology Specialists Clinic",
+            notes: referralNotes.trim() || `Urgent referral request due to highly suspect ${selectedScan.predictedClass} presenting atypical characteristics.`,
+            status: "pending",
+            created_at: new Date().toISOString()
+          });
+
+        if (referralError) throw referralError;
+      }
 
       setVerdictSuccess(true);
       setTimeout(() => {
         setVerdictSuccess(false);
         setSelectedScan(null);
         setVerdictNotes("");
+        setNeedReferral(false);
+        setReferringClinic("");
+        setReferralNotes("");
         loadDoctorData();
       }, 1500);
     } catch (err) {
@@ -181,6 +244,22 @@ export default function DoctorDashboard({ user }: DoctorDashboardProps) {
   };
   const pendingCases = scans.filter((s) => s.status === "pending_review" || s.status === "none");
   const reviewedCases = scans.filter((s) => s.status === "reviewed");
+
+  const filteredPendingCases = pendingCases.filter((s) => {
+    const matchesSearch = s.patientName.toLowerCase().includes(queueSearch.toLowerCase()) || 
+                          s.predictedClass.toLowerCase().includes(queueSearch.toLowerCase()) || 
+                          (s.bodyLocation && s.bodyLocation.toLowerCase().includes(queueSearch.toLowerCase()));
+    const matchesRisk = queueRiskFilter === "all" || s.riskLevel.toLowerCase() === queueRiskFilter.toLowerCase();
+    return matchesSearch && matchesRisk;
+  });
+
+  const filteredReviewedCases = reviewedCases.filter((s) => {
+    const matchesSearch = s.patientName.toLowerCase().includes(archiveSearch.toLowerCase()) || 
+                          s.predictedClass.toLowerCase().includes(archiveSearch.toLowerCase()) || 
+                          (s.bodyLocation && s.bodyLocation.toLowerCase().includes(archiveSearch.toLowerCase()));
+    const matchesRisk = archiveRiskFilter === "all" || s.riskLevel.toLowerCase() === archiveRiskFilter.toLowerCase();
+    return matchesSearch && matchesRisk;
+  });
 
   const getRiskColor = (risk: string) => {
     switch (risk) {
@@ -243,8 +322,11 @@ export default function DoctorDashboard({ user }: DoctorDashboardProps) {
           {[
             { id: "queue", label: "Active Review Queue", icon: ClipboardList },
             { id: "consultations", label: "Consultation Requests", icon: Users },
+            { id: "referrals", label: "Specialist Referrals", icon: Forward },
             { id: "history", label: "Patient Case History", icon: Users },
-            { id: "analytics", label: "Case Load Analytics", icon: BarChart2 }
+            { id: "analytics", label: "Case Load Analytics", icon: BarChart2 },
+            { id: "logs", label: "Clinical Audit Logs", icon: Terminal },
+            { id: "profile", label: "My Profile Settings", icon: UserIcon }
           ].map((tab) => {
             const Icon = tab.icon;
             const isActive = activeTab === tab.id;
@@ -289,8 +371,11 @@ export default function DoctorDashboard({ user }: DoctorDashboardProps) {
           {[
             { id: "queue", label: "Review Queue", icon: ClipboardList },
             { id: "consultations", label: "Consultations", icon: Users },
+            { id: "referrals", label: "Referrals", icon: Forward },
             { id: "history", label: "Patient History", icon: Users },
-            { id: "analytics", label: "Analytics", icon: BarChart2 }
+            { id: "analytics", label: "Analytics", icon: BarChart2 },
+            { id: "logs", label: "Logs", icon: Terminal },
+            { id: "profile", label: "Profile", icon: UserIcon }
           ].map((tab) => {
             const Icon = tab.icon;
             const isActive = activeTab === tab.id;
@@ -317,7 +402,15 @@ export default function DoctorDashboard({ user }: DoctorDashboardProps) {
         {/* Header Block inside Main Area */}
         <header className="bg-white border-b border-slate-100 py-4 px-6 sm:px-8 flex items-center justify-between shadow-xs shrink-0">
           <h1 className="text-base font-extrabold text-slate-800 flex items-center gap-2">
-            <span className="capitalize">{activeTab === "queue" ? "Clinical Case Review" : activeTab}</span>
+            <span className="capitalize">
+              {activeTab === "queue" 
+                ? "Clinical Case Review" 
+                : activeTab === "referrals"
+                  ? "Specialty Referrals Panel"
+                  : activeTab === "consultations"
+                    ? "Consultation Requests Queue"
+                    : activeTab}
+            </span>
             <span className="text-[10px] font-mono font-semibold bg-teal-50 text-teal-700 px-2 py-0.5 rounded-full">
               MD Board-Certified
             </span>
@@ -369,13 +462,46 @@ export default function DoctorDashboard({ user }: DoctorDashboardProps) {
         <div className="space-y-6" id="review-queue-tab">
           <div className="bg-white rounded-2xl border border-slate-200/80 shadow-md overflow-hidden">
             <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
-              <h3 className="text-sm font-bold text-slate-900">Outstanding Patient Specimen Cases ({pendingCases.length})</h3>
+              <h3 className="text-sm font-bold text-slate-900">Outstanding Patient Specimen Cases ({filteredPendingCases.length} of {pendingCases.length})</h3>
               <span className="text-[10px] text-slate-400 font-medium">Auto-refresh active</span>
             </div>
 
-            {pendingCases.length > 0 ? (
+            {/* Queue Search & Filter Controls */}
+            <div className="p-4 bg-slate-50/70 border-b border-slate-100 flex flex-col sm:flex-row gap-3 items-center">
+              <div className="relative flex-1 w-full">
+                <input
+                  type="text"
+                  placeholder="🔍 Search patient name, predicted class, or body location..."
+                  value={queueSearch}
+                  onChange={(e) => setQueueSearch(e.target.value)}
+                  className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-medium outline-none focus:ring-1 focus:ring-teal-500 text-slate-800"
+                />
+              </div>
+              <div className="flex gap-2 w-full sm:w-auto shrink-0">
+                <select
+                  value={queueRiskFilter}
+                  onChange={(e) => setQueueRiskFilter(e.target.value)}
+                  className="px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold outline-none focus:ring-1 focus:ring-teal-500 text-slate-700 cursor-pointer"
+                >
+                  <option value="all">⚠️ All Risk Levels</option>
+                  <option value="high">🔴 High Risk</option>
+                  <option value="medium">🟡 Medium Risk</option>
+                  <option value="low">🟢 Low Risk</option>
+                </select>
+                {(queueSearch !== "" || queueRiskFilter !== "all") && (
+                  <button
+                    onClick={() => { setQueueSearch(""); setQueueRiskFilter("all"); }}
+                    className="text-[10px] font-extrabold text-teal-600 hover:text-teal-800 underline cursor-pointer"
+                  >
+                    Clear Filters
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {filteredPendingCases.length > 0 ? (
               <div className="divide-y divide-slate-100">
-                {pendingCases.map((scan) => (
+                {filteredPendingCases.map((scan) => (
                   <div key={scan.id} className="p-5 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 hover:bg-slate-50/50 transition-all">
                     
                     <div className="flex items-center gap-4">
@@ -385,7 +511,14 @@ export default function DoctorDashboard({ user }: DoctorDashboardProps) {
                         className="h-12 w-12 rounded-lg object-cover border border-slate-200 shadow-sm shrink-0"
                       />
                       <div>
-                        <div className="text-xs font-bold text-slate-900">{scan.patientName}</div>
+                        <div className="text-xs font-bold text-slate-900 flex items-center gap-2">
+                          <span>{scan.patientName}</span>
+                          {scan.bodyLocation && (
+                            <span className="text-[10px] bg-slate-100 border border-slate-200 text-slate-600 font-bold px-2 py-0.2 rounded">
+                              📍 {scan.bodyLocation}
+                            </span>
+                          )}
+                        </div>
                         <div className="text-[10px] text-slate-400 mt-0.5 font-medium">
                           Age: {scan.patientAge || 24} • Gender: {scan.patientGender || "Male"} • Evaluation: <span className="font-semibold text-teal-600">{scan.predictedClass} ({scan.acronym})</span>
                         </div>
@@ -393,13 +526,23 @@ export default function DoctorDashboard({ user }: DoctorDashboardProps) {
                     </div>
 
                     <div className="flex items-center gap-4 w-full sm:w-auto justify-between sm:justify-end">
-                      <div className="flex items-center gap-2">
-                        <span className={`text-[9px] font-bold border px-2 py-0.5 rounded-full uppercase tracking-wider ${getRiskColor(scan.riskLevel)}`}>
-                          {scan.riskLevel} Risk
-                        </span>
-                        <span className="text-[10px] font-semibold text-slate-500">
-                          {scan.confidence.toFixed(1)}% Confidence
-                        </span>
+                      <div className="flex flex-col items-end gap-1 shrink-0">
+                        <div className="flex items-center gap-2">
+                          {scan.needsMandatoryReview && (
+                            <span className="text-[9px] font-bold bg-amber-50 border border-amber-200 text-amber-800 px-2 py-0.5 rounded-full animate-pulse">
+                              🚨 Needs Review
+                            </span>
+                          )}
+                          <span className={`text-[9px] font-bold border px-2 py-0.5 rounded-full uppercase tracking-wider ${getRiskColor(scan.riskLevel)}`}>
+                            {scan.riskLevel} Risk
+                          </span>
+                          <span className="text-[10px] font-semibold text-slate-500">
+                            {scan.confidence.toFixed(1)}% Conf.
+                          </span>
+                        </div>
+                        <div className="text-[10px] text-slate-400 font-mono font-medium">
+                          Uncertainty Index: <strong className={scan.needsMandatoryReview ? "text-amber-600 font-bold" : "text-slate-600"}>{(scan.uncertaintyScore !== undefined ? scan.uncertaintyScore * 100 : 15).toFixed(1)}%</strong>
+                        </div>
                       </div>
 
                       <button
@@ -416,7 +559,9 @@ export default function DoctorDashboard({ user }: DoctorDashboardProps) {
               </div>
             ) : (
               <div className="p-12 text-center text-slate-400 text-xs">
-                No outstanding patient screening cases waiting in your clinic queue.
+                {pendingCases.length > 0 
+                  ? "No outstanding cases match your current search queries or risk level filters."
+                  : "No outstanding patient screening cases waiting in your clinic queue."}
               </div>
             )}
           </div>
@@ -603,6 +748,52 @@ export default function DoctorDashboard({ user }: DoctorDashboardProps) {
                           />
                         </div>
 
+                        {/* Oncology/Surgical Referral section */}
+                        <div className="bg-slate-50 border border-slate-200/80 p-4 rounded-xl space-y-3">
+                          <label className="flex items-center gap-2 cursor-pointer select-none">
+                            <input
+                              type="checkbox"
+                              checked={needReferral}
+                              onChange={(e) => {
+                                setNeedReferral(e.target.checked);
+                                if (e.target.checked && !referringClinic) {
+                                  setReferringClinic("National Oncology & Surgical Dermatology Clinic");
+                                  setReferralNotes(`Formal oncological evaluation requested. Case ID ${selectedScan.id.slice(0, 8).toUpperCase()} presents as high-concern ${selectedScan.predictedClass}.`);
+                                }
+                              }}
+                              className="rounded border-slate-300 text-teal-600 focus:ring-teal-500 h-4 w-4 cursor-pointer"
+                            />
+                            <span className="text-xs font-bold text-slate-800">Initiate Surgical / Oncology Referral</span>
+                          </label>
+
+                          {needReferral && (
+                            <div className="space-y-3 pt-1">
+                              <div className="space-y-1">
+                                <label className="block text-[9px] font-bold text-slate-500 uppercase">Target Specialty Clinic</label>
+                                <input
+                                  type="text"
+                                  value={referringClinic}
+                                  onChange={(e) => setReferringClinic(e.target.value)}
+                                  placeholder="e.g. Mayo Clinic Dermatology Dept"
+                                  className="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-xs focus:ring-1 focus:ring-teal-500 outline-none bg-white"
+                                  required
+                                />
+                              </div>
+                              <div className="space-y-1">
+                                <label className="block text-[9px] font-bold text-slate-500 uppercase">Referral Dispatch Briefing Notes</label>
+                                <textarea
+                                  rows={2}
+                                  value={referralNotes}
+                                  onChange={(e) => setReferralNotes(e.target.value)}
+                                  placeholder="Specific reasons for escalation or pathological concerns..."
+                                  className="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-xs focus:ring-1 focus:ring-teal-500 outline-none bg-white"
+                                  required
+                                />
+                              </div>
+                            </div>
+                          )}
+                        </div>
+
                         <button
                           type="submit"
                           disabled={submittingVerdict}
@@ -626,6 +817,94 @@ export default function DoctorDashboard({ user }: DoctorDashboardProps) {
               </div>
 
             </div>
+
+            {/* Lesion Tracking Timeline section */}
+            {(() => {
+              const relatedScans = scans
+                .filter(s => s.patientId === selectedScan.patientId && (s.lesionId === selectedScan.lesionId || (s.bodyLocation && s.bodyLocation === selectedScan.bodyLocation)))
+                .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+              
+              return relatedScans.length > 0 ? (
+                <div className="border-t border-slate-100 pt-8 space-y-6">
+                  <div>
+                    <h4 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                      <TrendingUp className="h-5 w-5 text-teal-600 animate-pulse" />
+                      Lesion Chronology & Progression Timeline
+                    </h4>
+                    <p className="text-slate-500 text-[11px] mt-0.5">
+                      Chronological progression analytics tracking specimen characteristics, diameter risk factors, and deep learning model confidence outputs.
+                    </p>
+                  </div>
+
+                  <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+                    {/* Progress Chart */}
+                    <div className="lg:col-span-7 bg-slate-50 p-5 border border-slate-200/60 rounded-2xl h-72">
+                      <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-4">Neural Net Confidence Trajectory</span>
+                      <ResponsiveContainer width="100%" height="90%">
+                        <LineChart data={relatedScans.map(s => ({
+                          date: new Date(s.timestamp).toLocaleDateString(undefined, { month: "short", day: "numeric" }),
+                          confidence: s.confidence,
+                          risk: s.riskLevel
+                        }))}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                          <XAxis dataKey="date" stroke="#64748b" fontSize={10} tickLine={false} />
+                          <YAxis stroke="#64748b" fontSize={10} tickLine={false} domain={[0, 100]} />
+                          <Tooltip />
+                          <Line type="monotone" dataKey="confidence" stroke="#0f766e" strokeWidth={2.5} activeDot={{ r: 8 }} />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    </div>
+
+                    {/* List items */}
+                    <div className="lg:col-span-5 space-y-3 max-h-72 overflow-y-auto pr-1">
+                      <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">Historical Snapshot Logs</span>
+                      {relatedScans.slice().reverse().map((scan) => {
+                        const isCurrent = scan.id === selectedScan.id;
+                        return (
+                          <div 
+                            key={scan.id} 
+                            className={`p-3 rounded-xl border flex items-center justify-between gap-3 text-xs transition-all ${
+                              isCurrent 
+                                ? "bg-teal-50/50 border-teal-200 shadow-xs" 
+                                : "bg-white border-slate-100 hover:border-slate-200"
+                            }`}
+                          >
+                            <div className="flex items-center gap-2.5">
+                              <img 
+                                src={scan.imageUrl} 
+                                alt="specimen thumbnail" 
+                                className="w-10 h-10 rounded-lg object-cover border border-slate-200/80"
+                                referrerPolicy="no-referrer"
+                              />
+                              <div>
+                                <div className="font-bold text-slate-800 flex items-center gap-1.5">
+                                  {scan.predictedClass}
+                                  {isCurrent && <span className="text-[8px] bg-teal-100 text-teal-800 font-extrabold px-1.5 py-0.5 rounded">Active</span>}
+                                </div>
+                                <div className="text-[10px] text-slate-400">{new Date(scan.timestamp).toLocaleDateString()}</div>
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              <span className={`text-[9px] font-bold px-2 py-0.5 rounded border block mb-1 ${
+                                scan.riskLevel === "High" 
+                                  ? "bg-rose-50 border-rose-100 text-rose-700"
+                                  : scan.riskLevel === "Medium"
+                                    ? "bg-amber-50 border-amber-100 text-amber-700"
+                                    : "bg-emerald-50 border-emerald-100 text-emerald-700"
+                              }`}>
+                                {scan.riskLevel}
+                              </span>
+                              <span className="text-[10px] font-bold text-slate-600 font-mono">{scan.confidence.toFixed(1)}%</span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              ) : null;
+            })()}
+
           </div>
         </div>
       )}
@@ -776,18 +1055,141 @@ export default function DoctorDashboard({ user }: DoctorDashboardProps) {
       )}
 
       {/* -------------------------------------------------------------
+          TAB: SPECIALIST REFERRALS (ONCOLOGY/SURGICAL ESCALATION)
+          ------------------------------------------------------------- */}
+      {activeTab === "referrals" && !selectedScan && (
+        <div className="space-y-6" id="referrals-tab">
+          <div className="bg-white rounded-2xl border border-slate-200/80 shadow-md overflow-hidden">
+            <div className="p-5 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
+              <div>
+                <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                  <Forward className="h-5 w-5 text-teal-600" />
+                  Specialist & Oncology Referrals Queue
+                </h3>
+                <p className="text-slate-500 text-[11px] mt-0.5">
+                  Track outwards pathological escalations, surgical recommendations, and external clinic acceptances.
+                </p>
+              </div>
+              <span className="text-xs font-bold bg-teal-50 border border-teal-200 text-teal-800 px-3 py-1 rounded-full">
+                {referrals.length} Outward Referrals
+              </span>
+            </div>
+
+            {referrals.length > 0 ? (
+              <div className="divide-y divide-slate-100">
+                {referrals.map((ref) => (
+                  <div key={ref.id} className="p-5 space-y-3 hover:bg-slate-50/40 transition-colors">
+                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
+                      <div>
+                        <span className="text-[9px] font-mono font-bold text-slate-400 uppercase tracking-wide bg-slate-100 border border-slate-200/60 px-2 py-0.5 rounded">
+                          REFERRAL ID: {ref.id.slice(0, 8).toUpperCase()}
+                        </span>
+                        <h4 className="text-xs font-bold text-slate-800 mt-2">
+                          Patient: {ref.patient_name}
+                        </h4>
+                        <p className="text-[10px] text-slate-400 font-medium">Referred by: {ref.doctor_name || "Primary Physician"}</p>
+                      </div>
+                      <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full border ${
+                        ref.status === "discharged" || ref.status === "completed"
+                          ? "bg-emerald-50 border-emerald-100 text-emerald-800"
+                          : "bg-amber-50 border-amber-100 text-amber-800"
+                      }`}>
+                        {ref.status === "discharged" || ref.status === "completed" ? "Completed / Accepted" : "Pending Specialty Acceptance"}
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="p-3 bg-slate-50 rounded-lg border border-slate-100 text-xs">
+                        <span className="block text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-1">Target Specialist Clinic</span>
+                        <strong className="text-slate-700">{ref.referring_clinic}</strong>
+                      </div>
+                      <div className="p-3 bg-slate-50 rounded-lg border border-slate-100 text-xs">
+                        <span className="block text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-1">Referral Briefing & Pathology Notes</span>
+                        <p className="text-slate-600 italic">"{ref.notes}"</p>
+                      </div>
+                    </div>
+
+                    <div className="text-[10px] text-slate-400 flex justify-between items-center pt-2 border-t border-slate-100">
+                      <span>Initiated on: {new Date(ref.created_at).toLocaleDateString()}</span>
+                      
+                      {ref.status === "pending" && (
+                        <button
+                          onClick={async () => {
+                            try {
+                              const { error } = await supabase
+                                .from("referrals")
+                                .update({ status: "discharged" })
+                                .eq("id", ref.id);
+                              if (error) throw error;
+                              loadDoctorData();
+                            } catch (e) {
+                              console.error(e);
+                            }
+                          }}
+                          className="px-3 py-1 bg-teal-600 hover:bg-teal-700 text-white text-[10px] font-bold rounded cursor-pointer transition-colors"
+                        >
+                          Mark as Accepted / Completed
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="p-12 text-center text-slate-400 text-xs italic">
+                No active outgoing referrals found. Initiate an oncological referral during a patient skin scan review in the queue tab.
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* -------------------------------------------------------------
           TAB 2: COMPLETED CLINICAL CASE HISTORIES
           ------------------------------------------------------------- */}
       {activeTab === "history" && !selectedScan && (
         <div className="space-y-6" id="case-history-tab">
           <div className="bg-white rounded-2xl border border-slate-200/80 shadow-md overflow-hidden">
-            <div className="p-5 border-b border-slate-100 flex justify-between items-center">
-              <h3 className="text-sm font-bold text-slate-900">Clinically Evaluated Specimen Records ({reviewedCases.length})</h3>
+            <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+              <h3 className="text-sm font-bold text-slate-900">Clinically Evaluated Specimen Records ({filteredReviewedCases.length} of {reviewedCases.length})</h3>
             </div>
 
-            {reviewedCases.length > 0 ? (
+            {/* Archive Search & Filter Controls */}
+            <div className="p-4 bg-slate-50/70 border-b border-slate-100 flex flex-col sm:flex-row gap-3 items-center">
+              <div className="relative flex-1 w-full">
+                <input
+                  type="text"
+                  placeholder="🔍 Search patient name, predicted class, or location..."
+                  value={archiveSearch}
+                  onChange={(e) => setArchiveSearch(e.target.value)}
+                  className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-medium outline-none focus:ring-1 focus:ring-teal-500 text-slate-800"
+                />
+              </div>
+              <div className="flex gap-2 w-full sm:w-auto shrink-0">
+                <select
+                  value={archiveRiskFilter}
+                  onChange={(e) => setArchiveRiskFilter(e.target.value)}
+                  className="px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold outline-none focus:ring-1 focus:ring-teal-500 text-slate-700 cursor-pointer"
+                >
+                  <option value="all">⚠️ All Risk Levels</option>
+                  <option value="high">🔴 High Risk</option>
+                  <option value="medium">🟡 Medium Risk</option>
+                  <option value="low">🟢 Low Risk</option>
+                </select>
+                {(archiveSearch !== "" || archiveRiskFilter !== "all") && (
+                  <button
+                    onClick={() => { setArchiveSearch(""); setArchiveRiskFilter("all"); }}
+                    className="text-[10px] font-extrabold text-teal-600 hover:text-teal-800 underline cursor-pointer"
+                  >
+                    Clear Filters
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {filteredReviewedCases.length > 0 ? (
               <div className="divide-y divide-slate-100">
-                {reviewedCases.map((scan) => (
+                {filteredReviewedCases.map((scan) => (
                   <div key={scan.id} className="p-5 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 hover:bg-slate-50/50 transition-all">
                     
                     <div className="flex items-center gap-4">
@@ -828,7 +1230,9 @@ export default function DoctorDashboard({ user }: DoctorDashboardProps) {
               </div>
             ) : (
               <div className="p-12 text-center text-slate-400 text-xs">
-                No clinically completed cases archived in this workspace.
+                {reviewedCases.length > 0 
+                  ? "No clinically completed cases match your current search queries or risk filters."
+                  : "No clinically completed cases archived in this workspace."}
               </div>
             )}
           </div>
@@ -916,6 +1320,124 @@ export default function DoctorDashboard({ user }: DoctorDashboardProps) {
           </div>
 
         </div>
+      )}
+
+      {/* -------------------------------------------------------------
+          TAB: CLINICAL DECISION AUDIT LOGS
+          ------------------------------------------------------------- */}
+      {activeTab === "logs" && !selectedScan && (
+        <div className="space-y-6" id="clinical-audit-logs-tab">
+          {/* Stats Cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+            <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs flex items-center gap-4">
+              <div className="h-10 w-10 rounded-xl bg-teal-50 border border-teal-200 flex items-center justify-center text-teal-600">
+                <CheckCircle className="h-5 w-5" />
+              </div>
+              <div>
+                <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">Cases Evaluated</span>
+                <strong className="text-lg font-extrabold text-slate-900">{auditLogs.length} Cases</strong>
+              </div>
+            </div>
+
+            <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs flex items-center gap-4">
+              <div className="h-10 w-10 rounded-xl bg-cyan-50 border border-cyan-200 flex items-center justify-center text-cyan-600">
+                <ThumbsUp className="h-5 w-5" />
+              </div>
+              <div>
+                <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">AI Concordance</span>
+                <strong className="text-lg font-extrabold text-slate-900">
+                  {auditLogs.length > 0 
+                    ? Math.round((auditLogs.filter(l => l.doctorVerdict?.verdict === "Agree").length / auditLogs.length) * 100)
+                    : 100}%
+                </strong>
+              </div>
+            </div>
+
+            <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs flex items-center gap-4">
+              <div className="h-10 w-10 rounded-xl bg-rose-50 border border-rose-200 flex items-center justify-center text-rose-600">
+                <AlertTriangle className="h-5 w-5" />
+              </div>
+              <div>
+                <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">Biopsies Instructed</span>
+                <strong className="text-lg font-extrabold text-slate-900">
+                  {auditLogs.filter(l => l.doctorVerdict?.verdict === "Needs Biopsy").length} Cases
+                </strong>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-2xl border border-slate-200/80 shadow-md overflow-hidden">
+            <div className="p-5 border-b border-slate-100 bg-slate-50/50">
+              <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                <Terminal className="h-5 w-5 text-slate-700" />
+                Dermatology Clinical Verdict Audit Trails
+              </h3>
+              <p className="text-slate-500 text-[11px] mt-0.5">
+                Comprehensive record of active clinical assessments, diagnostic concordance ratings, and pathologically escalated cases associated with your credentials.
+              </p>
+            </div>
+
+            {auditLogs.length > 0 ? (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse text-xs">
+                  <thead>
+                    <tr className="bg-slate-50 text-[10px] font-bold text-slate-400 uppercase tracking-wider border-b border-slate-100">
+                      <th className="p-4">Case Specimen ID</th>
+                      <th className="p-4">Patient Name</th>
+                      <th className="p-4">AI Target Diagnosis</th>
+                      <th className="p-4">AI Risk Level</th>
+                      <th className="p-4">My Clinical Verdict</th>
+                      <th className="p-4">Evaluation Timestamp</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 text-slate-600 font-medium">
+                    {auditLogs.map((log) => (
+                      <tr key={log.id} className="hover:bg-slate-50/50 transition-colors">
+                        <td className="p-4 font-mono font-bold text-slate-900">#{log.id.slice(0, 8).toUpperCase()}</td>
+                        <td className="p-4">{log.patientName}</td>
+                        <td className="p-4 font-semibold text-slate-800">{log.classLabel}</td>
+                        <td className="p-4">
+                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${
+                            log.riskLevel === "high" 
+                              ? "bg-rose-50 border-rose-100 text-rose-700"
+                              : log.riskLevel === "medium"
+                                ? "bg-amber-50 border-amber-100 text-amber-700"
+                                : "bg-emerald-50 border-emerald-100 text-emerald-700"
+                          }`}>
+                            {log.riskLevel}
+                          </span>
+                        </td>
+                        <td className="p-4">
+                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${
+                            log.doctorVerdict?.verdict === "Agree" 
+                              ? "bg-emerald-50 border-emerald-100 text-emerald-700"
+                              : log.doctorVerdict?.verdict === "Needs Biopsy"
+                                ? "bg-rose-50 border-rose-100 text-rose-700"
+                                : "bg-blue-50 border-blue-100 text-blue-700"
+                          }`}>
+                            {log.doctorVerdict?.verdict}
+                          </span>
+                        </td>
+                        <td className="p-4 text-slate-400 font-mono">{log.doctorVerdict?.reviewedAt ? new Date(log.doctorVerdict.reviewedAt).toLocaleDateString() : ""}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div className="p-12 text-center text-slate-400 text-xs italic">
+                No clinical audit logs found. Visit the active review queue and approve/disagree with patient specimens to populate logs.
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* -------------------------------------------------------------
+          TAB: CLINICIAN PROFILE SETTINGS
+          ------------------------------------------------------------- */}
+      {activeTab === "profile" && !selectedScan && (
+        <DoctorProfileTab user={user} />
       )}
 
       </div>

@@ -5,6 +5,7 @@ import LandingPage from "./components/LandingPage";
 import PatientDashboard from "./components/PatientDashboard";
 import DoctorDashboard from "./components/DoctorDashboard";
 import AdminDashboard from "./components/AdminDashboard";
+import AIAssistant from "./components/AIAssistant";
 import { NotificationProvider, NotificationBell } from "./lib/NotificationContext";
 
 function AppContent() {
@@ -93,6 +94,9 @@ function AppContent() {
           <LandingPage />
         )}
       </main>
+
+      {/* Floating AI Assistant Chatbot available globally */}
+      <AIAssistant />
 
     </div>
   );

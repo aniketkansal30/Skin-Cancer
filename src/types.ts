@@ -8,6 +8,15 @@ export interface User {
   medicalLicense?: string;
   isVerified?: boolean; // Doctor verification status
   registrationDate: string;
+  age?: number;
+  gender?: string;
+  phone?: string;
+  emergencyContact?: string;
+  medicalHistory?: string;
+  specialty?: string;
+  clinicName?: string;
+  dob?: string;          // Date of Birth
+  avatarUrl?: string;    // Profile photo URL
 }
 
 export interface HeatmapPoint {
