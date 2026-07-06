@@ -1,341 +1,202 @@
+// Custom high-fidelity mock Supabase client for DermShield AI in AI Studio
+// This proxies key operations directly to the Express server's REST API endpoints (db.json)
+// and handles auxiliary tables in local storage, facilitating seamless client-server sync.
+
 import { Session } from "@supabase/supabase-js";
 
-// Types
-export interface User {
-  id: string;
-  email: string;
-  role: "patient" | "doctor" | "admin";
-  name: string;
-  medicalLicense?: string;
-  isVerified?: boolean;
-  registrationDate: string;
-}
+// Setup global auth event listeners
+const authListeners: ((event: string, session: Session | null) => void)[] = [];
 
-// Helper to convert snake_case to camelCase
-function camelCase(str: string): string {
-  return str.replace(/_([a-z])/g, (g) => g[1].toUpperCase());
-}
-
-// Helper to convert camelCase to snake_case
-function snakeCase(str: string): string {
-  return str.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
-}
-
-const LOCAL_STORAGE_KEY = "dermshield_mock_supabase_db";
-
-const INITIAL_PROFILES = [
-  {
-    id: "u-patient-1",
-    email: "patient@dermshield.com",
-    role: "patient",
-    name: "Aniket Kansal",
-    registration_date: new Date("2026-01-10T10:00:00Z").toISOString(),
-    is_verified: true
-  },
-  {
-    id: "u-doctor-1",
-    email: "doctor@dermshield.com",
-    role: "doctor",
-    name: "Dr. Sarah Jenkins, MD",
-    medical_license: "LIC-88291-DERM",
-    is_verified: true,
-    registration_date: new Date("2026-01-05T09:00:00Z").toISOString()
-  },
-  {
-    id: "u-doctor-2",
-    email: "dermatologist@dermshield.com",
-    role: "doctor",
-    name: "Dr. Rajesh Sharma, MBBS, DDVL",
-    medical_license: "LIC-44738-MED",
-    is_verified: false,
-    registration_date: new Date("2026-06-28T14:30:00Z").toISOString()
-  },
-  {
-    id: "u-admin-1",
-    email: "admin@dermshield.com",
-    role: "admin",
-    name: "Platform Administrator",
-    registration_date: new Date("2026-01-01T08:00:00Z").toISOString(),
-    is_verified: true
-  }
-];
-
-const INITIAL_SCANS = [
+// Seed fallback data for client-only static hosting environments (e.g. Vercel)
+const DEFAULT_FALLBACK_SCANS = [
   {
     id: "scan-1",
-    patient_id: "u-patient-1",
-    patient_name: "Aniket Kansal",
-    patient_age: 24,
-    patient_gender: "Male",
-    image_url: "https://images.unsplash.com/photo-1581594693702-fbdc51b2763b?auto=format&fit=crop&q=80&w=600",
-    predicted_class: "Melanoma",
+    patientId: "u-patient-1",
+    patientName: "Aniket Kansal",
+    patientAge: 24,
+    patientGender: "Male",
+    imageUrl: "https://images.unsplash.com/photo-1581594693702-fbdc51b2763b?auto=format&fit=crop&q=80&w=600",
+    predictedClass: "Melanoma",
     acronym: "MEL",
     confidence: 89.4,
-    risk_level: "High",
+    riskLevel: "High",
     explanation: "The Swish-activated CNN+ViT ensemble detected pronounced structural asymmetry (A score: 1.8), marked border irregularity (B score: 2.1), and multi-colored variegation (C score: 3.2). Additionally, high-intensity local activation of the Vision Transformer self-attention maps points heavily to an atypical pigment network near the upper margin.",
-    clinical_details: "Atypical melanocytic lesion showing dynamic asymmetry and jagged borders. Grad-CAM shows localized hyper-activation (hotspot weight: 0.95) corresponding to standard Fitzpatrick type II presentation of evolving superficial spreading melanoma. Recommend immediate excisional biopsy with 5mm margins.",
-    heatmap_points: [
+    clinicalDetails: "Atypical melanocytic lesion showing dynamic asymmetry and jagged borders. Grad-CAM shows localized hyper-activation (hotspot weight: 0.95) corresponding to standard Fitzpatrick type II presentation of evolving superficial spreading melanoma. Recommend immediate excisional biopsy with 5mm margins.",
+    heatmapPoints: [
       { x: 48, y: 52, radius: 25, weight: 0.95 },
       { x: 42, y: 48, radius: 15, weight: 0.82 },
       { x: 55, y: 56, radius: 20, weight: 0.76 }
     ],
-    created_at: new Date("2026-07-01T15:20:00Z").toISOString(),
-    status: "pending_review",
-    body_location: "Upper Back",
-    lesion_id: "lesion-1",
-    uncertainty_score: 0.58,
-    needs_mandatory_review: true,
-    contributing_factors: [
-      { label: "Border Irregularity", weight: 34 },
-      { label: "Color Variation", weight: 28 },
-      { label: "Asymmetry", weight: 21 },
-      { label: "Diameter", weight: 17 }
-    ]
+    timestamp: new Date("2026-07-01T15:20:00Z").toISOString(),
+    status: "pending_review"
   },
   {
     id: "scan-2",
-    patient_id: "u-patient-1",
-    patient_name: "Aniket Kansal",
-    patient_age: 24,
-    patient_gender: "Male",
-    image_url: "https://images.unsplash.com/photo-1612349317150-e413f6a5b16d?auto=format&fit=crop&q=80&w=600",
-    predicted_class: "Melanocytic Nevus",
+    patientId: "u-patient-1",
+    patientName: "Aniket Kansal",
+    patientAge: 24,
+    patientGender: "Male",
+    imageUrl: "https://images.unsplash.com/photo-1612349317150-e413f6a5b16d?auto=format&fit=crop&q=80&w=600",
+    predictedClass: "Melanocytic Nevus",
     acronym: "NV",
     confidence: 97.2,
-    risk_level: "Low",
+    riskLevel: "Low",
     explanation: "The neural network shows high confidence (97.2%) for a completely benign melanocytic nevus. On-screen features demonstrate excellent radial symmetry, sharp well-defined borders, and uniform brown pigment network distribution.",
-    clinical_details: "Symmetrical dermoscopic structure. No atypical pigment networks, regression structures, or blue-white veils identified. Regular benign nevus pattern. Grad-CAM activations are uniformly spread with low concentration peak.",
-    heatmap_points: [
+    clinicalDetails: "Symmetrical dermoscopic structure. No atypical pigment networks, regression structures, or blue-white veils identified. Regular benign nevus pattern. Grad-CAM activations are uniformly spread with low concentration peak.",
+    heatmapPoints: [
       { x: 50, y: 50, radius: 15, weight: 0.45 }
     ],
-    created_at: new Date("2026-06-15T11:10:00Z").toISOString(),
+    timestamp: new Date("2026-06-15T11:10:00Z").toISOString(),
     status: "reviewed",
-    body_location: "Left Forearm",
-    lesion_id: "lesion-2",
-    uncertainty_score: 0.12,
-    needs_mandatory_review: false,
-    contributing_factors: [
-      { label: "Regular Pigment Network", weight: 58 },
-      { label: "Symmetrical Borders", weight: 26 },
-      { label: "Uniform Color", weight: 11 },
-      { label: "Diameter <6mm", weight: 5 }
-    ],
-    doctor_verdict: {
+    doctorVerdict: {
       status: "Agree",
       notes: "Typical benign compound nevus. Symmetrical. No follow-up or biopsy required unless patient reports rapid changes or itching. Advised annual skin self-checks using ABCDE criteria.",
       reviewedAt: new Date("2026-06-16T10:00:00Z").toISOString(),
       doctorId: "u-doctor-1",
       doctorName: "Dr. Sarah Jenkins, MD"
     }
+  }
+];
+
+const DEFAULT_FALLBACK_PROFILES = [
+  {
+    id: "u-patient-1",
+    email: "patient@dermshield.com",
+    role: "patient",
+    name: "Aniket Kansal",
+    registrationDate: new Date("2026-01-10T10:00:00Z").toISOString()
   },
   {
-    id: "scan-3",
-    patient_id: "u-patient-another",
-    patient_name: "Rohan Verma",
-    patient_age: 42,
-    patient_gender: "Male",
-    image_url: "https://images.unsplash.com/photo-1576091160550-2173dba999ef?auto=format&fit=crop&q=80&w=600",
-    predicted_class: "Basal Cell Carcinoma",
-    acronym: "BCC",
-    confidence: 78.1,
-    risk_level: "High",
-    explanation: "The model detected a high likelihood of Basal Cell Carcinoma, characterized by local telangiectasias (fine blood vessel lines) and a pearly translucent border structure detected via ViT patch embeddings.",
-    clinical_details: "Nodular basal cell carcinoma candidate. Prominent shiny nodule. Grad-CAM self-attention maps show strong localized focus around translucent micro-structures. Biopsy is highly recommended.",
-    heatmap_points: [
-      { x: 52, y: 45, radius: 20, weight: 0.88 },
-      { x: 58, y: 48, radius: 12, weight: 0.65 }
-    ],
-    created_at: new Date("2026-06-29T16:45:00Z").toISOString(),
-    status: "reviewed",
-    body_location: "Chest",
-    lesion_id: "lesion-3",
-    uncertainty_score: 0.44,
-    needs_mandatory_review: false,
-    contributing_factors: [
-      { label: "Pearly Translucent Border", weight: 42 },
-      { label: "Telangiectasia Vessels", weight: 28 },
-      { label: "Asymmetry", weight: 18 },
-      { label: "Color Uniformity", weight: 12 }
-    ],
-    doctor_verdict: {
-      status: "Needs Biopsy",
-      notes: "Pearly borders with minor telangiectasia. I agree with the model's high risk indicator. I recommend a punch biopsy to confirm Basal Cell Carcinoma. I have requested Rohan to schedule an in-person clinical visit.",
-      reviewedAt: new Date("2026-06-30T09:15:00Z").toISOString(),
-      doctorId: "u-doctor-1",
-      doctorName: "Dr. Sarah Jenkins, MD"
-    }
-  }
-];
-
-const INITIAL_LESIONS = [
-  {
-    id: "lesion-1",
-    patient_id: "u-patient-1",
-    body_location: "Upper Back",
-    nickname: "Upper back dark mole",
-    created_at: new Date("2026-06-01T10:00:00Z").toISOString()
+    id: "u-doctor-1",
+    email: "doctor@dermshield.com",
+    role: "doctor",
+    name: "Dr. Sarah Jenkins, MD",
+    medicalLicense: "LIC-88291-DERM",
+    isVerified: true,
+    registrationDate: new Date("2026-01-05T09:00:00Z").toISOString()
   },
   {
-    id: "lesion-2",
-    patient_id: "u-patient-1",
-    body_location: "Left Forearm",
-    nickname: "Left forearm benign mole",
-    created_at: new Date("2026-06-15T11:00:00Z").toISOString()
+    id: "u-admin-1",
+    email: "admin@dermshield.com",
+    role: "admin",
+    name: "Platform Administrator",
+    registrationDate: new Date("2026-01-01T08:00:00Z").toISOString()
   }
 ];
 
-const INITIAL_REFERRALS = [
-  {
-    id: "ref-1",
-    scan_id: "scan-1",
-    referring_doctor_id: "u-doctor-1",
-    referred_to_doctor_id: "u-doctor-2",
-    reason: "Complex neural map with prominent self-attention clusters around irregular margins. Requesting secondary clinical histopathology recommendation.",
-    status: "pending",
-    created_at: new Date("2026-07-02T10:00:00Z").toISOString()
-  }
-];
-
-const INITIAL_CONSULTATIONS = [
+const DEFAULT_FALLBACK_CONSULTATIONS = [
   {
     id: "c-1",
-    scan_id: "scan-1",
-    patient_id: "u-patient-1",
-    patient_name: "Aniket Kansal",
-    doctor_id: "u-doctor-1",
-    doctor_name: "Dr. Sarah Jenkins, MD",
+    scanId: "scan-1",
+    patientId: "u-patient-1",
+    patientName: "Aniket Kansal",
+    doctorId: "u-doctor-1",
+    doctorName: "Dr. Sarah Jenkins, MD",
     message: "Please review my upper back scan result. The AI predicted Melanoma with High Risk and I am very concerned.",
     status: "requested",
-    created_at: new Date("2026-07-01T15:25:00Z").toISOString()
+    timestamp: new Date("2026-07-01T15:25:00Z").toISOString()
   }
 ];
 
-const INITIAL_NOTIFICATIONS = [
-  {
-    id: "n-1",
-    user_id: "u-patient-1",
-    type: "verdict",
-    message: "Your mole scan on upper back has been reviewed by Dr. Sarah Jenkins. Status: High Risk (Biopsy requested).",
-    read: false,
-    created_at: new Date("2026-07-01T15:30:00Z").toISOString()
-  }
-];
-
-const INITIAL_LOGS = [
-  {
-    id: "log-1",
-    model_name: "DermShield-CNN-ViT-v1.4",
-    patient_id: "u-patient-1",
-    image_size_kb: 342,
-    duration_ms: 1420,
-    status: "success",
-    created_at: new Date("2026-07-01T15:20:00Z").toISOString()
-  },
-  {
-    id: "log-2",
-    model_name: "DermShield-CNN-ViT-v1.4",
-    patient_id: "u-patient-1",
-    image_size_kb: 184,
-    duration_ms: 1150,
-    status: "success",
-    created_at: new Date("2026-06-15T11:10:00Z").toISOString()
-  }
-];
-
-function getLocalStore(): Record<string, any[]> {
-  const data = localStorage.getItem(LOCAL_STORAGE_KEY);
-  if (!data) {
-    const initial = {
-      profiles: INITIAL_PROFILES,
-      scans: INITIAL_SCANS,
-      consultations: INITIAL_CONSULTATIONS,
-      notifications: INITIAL_NOTIFICATIONS,
-      inference_logs: INITIAL_LOGS,
-      lesions: INITIAL_LESIONS,
-      referrals: INITIAL_REFERRALS
-    };
-    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(initial));
-    return initial;
-  }
+// Helper to get active session from localStorage
+function getLocalSession(): any {
+  const sessionData = localStorage.getItem("dermshield_session");
+  if (!sessionData) return null;
   try {
-    const parsed = JSON.parse(data);
-    // Ensure back-compatibility for existing local storage objects that don't have the new keys
-    if (!parsed.lesions) parsed.lesions = INITIAL_LESIONS;
-    if (!parsed.referrals) parsed.referrals = INITIAL_REFERRALS;
-    return parsed;
+    return JSON.parse(sessionData);
   } catch {
-    const initial = {
-      profiles: INITIAL_PROFILES,
-      scans: INITIAL_SCANS,
-      consultations: INITIAL_CONSULTATIONS,
-      notifications: INITIAL_NOTIFICATIONS,
-      inference_logs: INITIAL_LOGS,
-      lesions: INITIAL_LESIONS,
-      referrals: INITIAL_REFERRALS
-    };
-    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(initial));
-    return initial;
+    return null;
   }
 }
 
-function saveLocalStore(store: Record<string, any[]>) {
-  localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(store));
+// Helper to set active session in localStorage
+function setLocalSession(session: any) {
+  if (session) {
+    localStorage.setItem("dermshield_session", JSON.stringify(session));
+  } else {
+    localStorage.removeItem("dermshield_session");
+  }
 }
 
-// Real-time listener storage
-interface RealtimeListener {
-  channelName: string;
-  table: string;
-  userId: string;
-  callback: (payload: any) => void;
+// Map database row schemas from local backend camelCase to Supabase snake_case
+function mapScanToSnake(s: any): any {
+  return {
+    id: s.id,
+    patient_id: s.patientId,
+    patient_name: s.patientName,
+    patient_age: s.patientAge,
+    patient_gender: s.patientGender,
+    image_url: s.imageUrl,
+    predicted_class: s.predictedClass,
+    acronym: s.acronym,
+    confidence: s.confidence,
+    risk_level: s.riskLevel,
+    explanation: s.explanation,
+    clinical_details: s.clinicalDetails,
+    heatmap_points: s.heatmapPoints,
+    created_at: s.timestamp,
+    status: s.status,
+    doctor_verdict: s.doctorVerdict,
+    body_location: s.bodyLocation,
+    lesion_id: s.lesionId,
+    uncertainty_score: s.uncertaintyScore,
+    needs_mandatory_review: s.needsMandatoryReview,
+    contributing_factors: s.contributingFactors
+  };
 }
 
-const realtimeListeners: RealtimeListener[] = [];
-
-function triggerRealtimeNotification(notification: any) {
-  setTimeout(() => {
-    realtimeListeners.forEach((l) => {
-      if (l.table === "notifications" && l.userId === notification.user_id) {
-        l.callback({ new: notification });
-      }
-    });
-  }, 100);
+function mapUserToSnake(u: any): any {
+  return {
+    id: u.id,
+    email: u.email,
+    role: u.role,
+    name: u.name,
+    medical_license: u.medicalLicense,
+    is_verified: u.isVerified,
+    registration_date: u.registrationDate
+  };
 }
 
-// Fluent Mock Query Builder
-class MockQueryBuilder {
-  private table: string;
-  private filters: Array<(item: any) => boolean> = [];
-  private isInsert = false;
-  private isUpdate = false;
-  private isDelete = false;
-  private insertData: any = null;
-  private updateData: any = null;
+function mapConsultationToSnake(c: any): any {
+  return {
+    id: c.id,
+    scan_id: c.scanId,
+    patient_id: c.patientId,
+    patient_name: c.patientName,
+    doctor_id: c.doctorId,
+    doctor_name: c.doctorName,
+    message: c.message,
+    status: c.status,
+    notes: c.notes,
+    created_at: c.timestamp,
+    preferred_at: c.preferredAt,
+    scheduled_at: c.scheduledAt
+  };
+}
+
+class SupabaseQueryBuilder {
+  private tableName: string;
+  private filters: { field: string; value: any }[] = [];
   private orderField: string | null = null;
-  private orderAscending = true;
+  private orderAscending: boolean = true;
   private limitCount: number | null = null;
-  private isSingle = false;
 
-  constructor(table: string) {
-    this.table = table;
+  constructor(tableName: string) {
+    this.tableName = tableName;
   }
 
-  select(columns?: string, options?: any) {
+  select(fields = "*", options?: any) {
+    // We fetch everything and filter/slice in memory
     return this;
   }
 
-  eq(column: string, value: any) {
-    this.filters.push((item: any) => {
-      const val1 = item[column];
-      const val2 = item[camelCase(column)];
-      const val3 = item[snakeCase(column)];
-      return val1 === value || val2 === value || val3 === value;
-    });
+  eq(field: string, value: any) {
+    this.filters.push({ field, value });
     return this;
   }
 
-  order(column: string, options?: { ascending?: boolean }) {
-    this.orderField = column;
+  order(field: string, options?: { ascending?: boolean }) {
+    this.orderField = field;
     this.orderAscending = options?.ascending !== false;
     return this;
   }
@@ -345,313 +206,564 @@ class MockQueryBuilder {
     return this;
   }
 
-  single() {
-    this.isSingle = true;
-    return this;
-  }
+  async execute() {
+    let data: any[] = [];
 
-  insert(data: any) {
-    this.isInsert = true;
-    this.insertData = data;
-    return this;
-  }
-
-  update(data: any) {
-    this.isUpdate = true;
-    this.updateData = data;
-    return this;
-  }
-
-  delete() {
-    this.isDelete = true;
-    return this;
-  }
-
-  async then(onfulfilled?: (value: any) => any, onrejected?: (reason: any) => any) {
-    try {
-      const res = await this.execute();
-      if (onfulfilled) return onfulfilled(res);
-      return res;
-    } catch (err) {
-      if (onrejected) return onrejected(err);
-      throw err;
-    }
-  }
-
-  private async execute() {
-    const store = getLocalStore();
-    let list = store[this.table] || [];
-
-    if (this.isInsert) {
-      const rowsToInsert = Array.isArray(this.insertData) ? this.insertData : [this.insertData];
-      const insertedRows = rowsToInsert.map(r => {
-        const id = r.id || (this.table === "profiles" ? "u-" : this.table === "scans" ? "scan-" : this.table === "consultations" ? "c-" : "id-") + Math.random().toString(36).substring(2, 9);
-        const newRow = {
-          id,
-          created_at: new Date().toISOString(),
-          registration_date: new Date().toISOString(),
-          ...r
-        };
-        return newRow;
-      });
-
-      list.push(...insertedRows);
-      store[this.table] = list;
-      saveLocalStore(store);
-
-      // Trigger realtime update if inserting a notification
-      if (this.table === "notifications") {
-        insertedRows.forEach(row => {
-          triggerRealtimeNotification(row);
-        });
-      }
-
-      const resData = Array.isArray(this.insertData) ? insertedRows : insertedRows[0];
-      return { data: resData, error: null, count: insertedRows.length };
-    }
-
-    if (this.isUpdate) {
-      let updatedRows: any[] = [];
-      list = list.map((item: any) => {
-        const matches = this.filters.every(f => f(item));
-        if (matches) {
-          const updated = { ...item, ...this.updateData };
-          updatedRows.push(updated);
-          return updated;
+    const getLocalFallback = (table: string, defaults: any[]) => {
+      const key = `dermshield_local_table_${table}`;
+      const local = localStorage.getItem(key);
+      if (local) {
+        try {
+          return JSON.parse(local);
+        } catch {
+          // ignore
         }
-        return item;
+      }
+      localStorage.setItem(key, JSON.stringify(defaults));
+      return defaults;
+    };
+
+    try {
+      if (this.tableName === "scans") {
+        try {
+          const res = await fetch("/api/scans");
+          const contentType = res.headers.get("content-type") || "";
+          if (res.ok && contentType.includes("application/json")) {
+            const scans = await res.json();
+            data = scans.map(mapScanToSnake);
+            // Sync to local fallback to keep it up to date
+            localStorage.setItem("dermshield_local_table_scans", JSON.stringify(scans));
+          } else {
+            throw new Error("Invalid response or non-JSON");
+          }
+        } catch {
+          const rawScans = getLocalFallback("scans", DEFAULT_FALLBACK_SCANS);
+          data = rawScans.map(mapScanToSnake);
+        }
+      } else if (this.tableName === "profiles") {
+        try {
+          const res = await fetch("/api/admin/users");
+          const contentType = res.headers.get("content-type") || "";
+          if (res.ok && contentType.includes("application/json")) {
+            const users = await res.json();
+            data = users.map(mapUserToSnake);
+            localStorage.setItem("dermshield_local_table_profiles", JSON.stringify(users));
+          } else {
+            throw new Error("Invalid response or non-JSON");
+          }
+        } catch {
+          const rawProfiles = getLocalFallback("profiles", DEFAULT_FALLBACK_PROFILES);
+          data = rawProfiles.map(mapUserToSnake);
+        }
+      } else if (this.tableName === "consultations") {
+        try {
+          const res = await fetch("/api/consultations");
+          const contentType = res.headers.get("content-type") || "";
+          if (res.ok && contentType.includes("application/json")) {
+            const consults = await res.json();
+            data = consults.map(mapConsultationToSnake);
+            localStorage.setItem("dermshield_local_table_consultations", JSON.stringify(consults));
+          } else {
+            throw new Error("Invalid response or non-JSON");
+          }
+        } catch {
+          const rawConsults = getLocalFallback("consultations", DEFAULT_FALLBACK_CONSULTATIONS);
+          data = rawConsults.map(mapConsultationToSnake);
+        }
+      } else {
+        // Fallback for auxiliary tables (lesions, referrals, inference_logs)
+        const localData = localStorage.getItem(`dermshield_table_${this.tableName}`);
+        data = localData ? JSON.parse(localData) : [];
+      }
+    } catch (err) {
+      console.error(`Error loading mock table ${this.tableName}:`, err);
+    }
+
+    // Apply exact match filters
+    for (const f of this.filters) {
+      data = data.filter(item => {
+        const itemValue = item[f.field];
+        if (itemValue === undefined) return true;
+        return String(itemValue).toLowerCase() === String(f.value).toLowerCase();
       });
-
-      store[this.table] = list;
-      saveLocalStore(store);
-
-      // "Postgres Triggers" simulation to trigger live patient notifications
-      if (this.table === "scans" && this.updateData.status === "reviewed") {
-        updatedRows.forEach(scan => {
-          const notif = {
-            id: "n-" + Math.random().toString(36).substring(2, 9),
-            user_id: scan.patient_id,
-            type: "verdict",
-            message: `Your skin lesion scan has been reviewed. Doctor verdict: ${scan.doctor_verdict?.status || 'No Action'}`,
-            read: false,
-            created_at: new Date().toISOString()
-          };
-          const currentStore = getLocalStore();
-          currentStore.notifications = currentStore.notifications || [];
-          currentStore.notifications.push(notif);
-          saveLocalStore(currentStore);
-          triggerRealtimeNotification(notif);
-        });
-      }
-
-      if (this.table === "consultations") {
-        updatedRows.forEach(consult => {
-          let message = "";
-          let type: "scheduled" | "completed" = "scheduled";
-          if (this.updateData.status === "scheduled") {
-            message = `Your consultation with ${consult.doctor_name} has been scheduled for ${new Date(consult.scheduled_at).toLocaleString()}`;
-            type = "scheduled";
-          } else if (this.updateData.status === "completed") {
-            message = `Your consultation session with ${consult.doctor_name} has been completed. Notes: ${consult.notes || ''}`;
-            type = "completed";
-          }
-
-          if (message) {
-            const notif = {
-              id: "n-" + Math.random().toString(36).substring(2, 9),
-              user_id: consult.patient_id,
-              type,
-              message,
-              read: false,
-              created_at: new Date().toISOString()
-            };
-            const currentStore = getLocalStore();
-            currentStore.notifications = currentStore.notifications || [];
-            currentStore.notifications.push(notif);
-            saveLocalStore(currentStore);
-            triggerRealtimeNotification(notif);
-          }
-        });
-      }
-
-      return { data: updatedRows, error: null, count: updatedRows.length };
     }
 
-    if (this.isDelete) {
-      list = list.filter((item: any) => !this.filters.every(f => f(item)));
-      store[this.table] = list;
-      saveLocalStore(store);
-      return { data: null, error: null, count: 0 };
-    }
-
-    // Default SELECT
-    let results = [...list];
-
-    // Filter
-    if (this.filters.length > 0) {
-      results = results.filter(item => this.filters.every(f => f(item)));
-    }
-
-    // Sort
+    // Apply sorting
     if (this.orderField) {
-      const field = this.orderField;
-      results.sort((a, b) => {
-        const valA = a[field] ?? a[camelCase(field)] ?? a[snakeCase(field)] ?? "";
-        const valB = b[field] ?? b[camelCase(field)] ?? b[snakeCase(field)] ?? "";
+      const f = this.orderField;
+      data.sort((a, b) => {
+        const valA = a[f] || "";
+        const valB = b[f] || "";
         if (valA < valB) return this.orderAscending ? -1 : 1;
         if (valA > valB) return this.orderAscending ? 1 : -1;
         return 0;
       });
     }
 
-    // Limit
+    // Apply limit
     if (this.limitCount !== null) {
-      results = results.slice(0, this.limitCount);
+      data = data.slice(0, this.limitCount);
     }
 
-    if (this.isSingle) {
-      return { data: results[0] || null, error: results.length === 0 ? { message: "Not found" } : null, count: results.length > 0 ? 1 : 0 };
+    return { data, error: null, count: data.length };
+  }
+
+  // Thenable implementation to allow direct await on the builder
+  then(onfulfilled?: (value: any) => any, onrejected?: (error: any) => any) {
+    return this.execute().then(onfulfilled, onrejected);
+  }
+
+  // Chainable helper for single row requests
+  async single() {
+    const res = await this.execute();
+    return { data: res.data[0] || null, error: res.data[0] ? null : { message: "Not found" } };
+  }
+
+  // Insert operation
+  async insert(rowOrRows: any) {
+    const rows = Array.isArray(rowOrRows) ? rowOrRows : [rowOrRows];
+    const results: any[] = [];
+
+    const getLocalFallback = (table: string, defaults: any[]) => {
+      const key = `dermshield_local_table_${table}`;
+      const local = localStorage.getItem(key);
+      if (local) {
+        try { return JSON.parse(local); } catch {}
+      }
+      localStorage.setItem(key, JSON.stringify(defaults));
+      return defaults;
+    };
+
+    for (const row of rows) {
+      try {
+        if (this.tableName === "scans") {
+          // Send to the Express prediction route
+          const camelRow = {
+            imageBase64: row.image_url,
+            patientId: row.patient_id,
+            patientName: row.patient_name,
+            patientAge: row.patient_age,
+            patientGender: row.patient_gender,
+            bodyLocation: row.body_location,
+            lesionId: row.lesion_id,
+            uncertaintyScore: row.uncertainty_score,
+            needsMandatoryReview: row.needs_mandatory_review,
+            contributingFactors: row.contributing_factors
+          };
+
+          try {
+            const res = await fetch("/api/predict", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(camelRow)
+            });
+
+            const contentType = res.headers.get("content-type") || "";
+            if (res.ok && contentType.includes("application/json")) {
+              const newScan = await res.json();
+              results.push(mapScanToSnake(newScan));
+              
+              // Save to local storage cache
+              const currentList = getLocalFallback("scans", DEFAULT_FALLBACK_SCANS);
+              currentList.push(newScan);
+              localStorage.setItem("dermshield_local_table_scans", JSON.stringify(currentList));
+            } else {
+              throw new Error("Prediction API failed, using local model simulation");
+            }
+          } catch (err) {
+            // Local simulation fallback
+            console.warn("Prediction API failed, simulating locally:", err);
+            
+            // Generate a simulated model prediction
+            const predictedClasses = [
+              { name: "Melanoma", acronym: "MEL", risk: "High", desc: "Pronounced structural asymmetry and vision transformer activation maps highlight deep irregular margins. Recommend biopsy." },
+              { name: "Melanocytic Nevus", acronym: "NV", risk: "Low", desc: "Benign symmetrical lesion with well-defined borders and regular pigmentation." },
+              { name: "Basal Cell Carcinoma", acronym: "BCC", risk: "Medium", desc: "Pearly nodule or pink patch with arborizing telangiectasia." },
+              { name: "Squamous Cell Carcinoma", acronym: "SCC", risk: "High", desc: "Scaly or crusted firm red lesion with elevated margins." }
+            ];
+            
+            // Make a random choice
+            const randomPick = predictedClasses[Math.floor(Math.random() * predictedClasses.length)];
+            const id = "scan-" + Math.random().toString(36).substring(2, 9);
+            const mockScan = {
+              id,
+              patientId: row.patient_id || "anonymous",
+              patientName: row.patient_name || "Guest Patient",
+              patientAge: Number(row.patient_age) || 24,
+              patientGender: row.patient_gender || "Male",
+              imageUrl: row.image_url,
+              predictedClass: randomPick.name,
+              acronym: randomPick.acronym,
+              confidence: Number((80 + Math.random() * 19).toFixed(1)),
+              riskLevel: randomPick.risk,
+              explanation: `The simulated CNN+Vision Transformer ensemble model identified characteristics suggestive of ${randomPick.name}. ${randomPick.desc}`,
+              clinicalDetails: `Atypical cutaneous presentation. Grad-CAM overlay activates around key cellular regions. Conf = ${(80 + Math.random() * 19).toFixed(1)}%.`,
+              heatmapPoints: [
+                { x: Math.floor(40 + Math.random() * 20), y: Math.floor(40 + Math.random() * 20), radius: 20, weight: 0.85 }
+              ],
+              timestamp: new Date().toISOString(),
+              status: "pending_review",
+              bodyLocation: row.body_location || "Chest",
+              lesionId: row.lesion_id || "lesion-new",
+              uncertaintyScore: Number((Math.random() * 15).toFixed(1)),
+              needsMandatoryReview: randomPick.risk === "High",
+              contributingFactors: { asymmetry: "Low", border: "Medium", color: "Medium" }
+            };
+
+            const currentList = getLocalFallback("scans", DEFAULT_FALLBACK_SCANS);
+            currentList.push(mockScan);
+            localStorage.setItem("dermshield_local_table_scans", JSON.stringify(currentList));
+
+            results.push(mapScanToSnake(mockScan));
+          }
+        } else if (this.tableName === "consultations") {
+          const camelRow = {
+            scanId: row.scan_id,
+            patientId: row.patient_id,
+            patientName: row.patient_name,
+            doctorId: row.doctor_id,
+            doctorName: row.doctor_name,
+            message: row.message,
+            preferredAt: row.preferred_at
+          };
+
+          try {
+            const res = await fetch("/api/consultations", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(camelRow)
+            });
+
+            const contentType = res.headers.get("content-type") || "";
+            if (res.ok && contentType.includes("application/json")) {
+              const newConsult = await res.json();
+              results.push(mapConsultationToSnake(newConsult));
+
+              const currentList = getLocalFallback("consultations", DEFAULT_FALLBACK_CONSULTATIONS);
+              currentList.push(newConsult);
+              localStorage.setItem("dermshield_local_table_consultations", JSON.stringify(currentList));
+            } else {
+              throw new Error("Consultation API failed");
+            }
+          } catch (err) {
+            console.warn("Consultation API failed, scheduling locally:", err);
+            const id = "consult-" + Math.random().toString(36).substring(2, 9);
+            const mockConsult = {
+              id,
+              scanId: row.scan_id,
+              patientId: row.patient_id || "anonymous",
+              patientName: row.patient_name || "Guest Patient",
+              doctorId: row.doctor_id || "u-doctor-1",
+              doctorName: row.doctor_name || "Dr. Sarah Jenkins, MD",
+              message: row.message,
+              status: "requested",
+              timestamp: new Date().toISOString(),
+              preferredAt: row.preferred_at || new Date().toISOString()
+            };
+
+            const currentList = getLocalFallback("consultations", DEFAULT_FALLBACK_CONSULTATIONS);
+            currentList.push(mockConsult);
+            localStorage.setItem("dermshield_local_table_consultations", JSON.stringify(currentList));
+
+            results.push(mapConsultationToSnake(mockConsult));
+          }
+        } else {
+          // Auxiliary local table insert (lesions, referrals, inference_logs)
+          const localData = localStorage.getItem(`dermshield_table_${this.tableName}`);
+          const tableData = localData ? JSON.parse(localData) : [];
+          
+          const newRow = {
+            id: row.id || "r-" + Math.random().toString(36).substring(2, 9),
+            created_at: new Date().toISOString(),
+            ...row
+          };
+
+          tableData.push(newRow);
+          localStorage.setItem(`dermshield_table_${this.tableName}`, JSON.stringify(tableData));
+          results.push(newRow);
+        }
+      } catch (err: any) {
+        console.error(`Mock database insert failed in table ${this.tableName}:`, err);
+        return { data: null, error: err };
+      }
     }
 
-    return { data: results, error: null, count: results.length };
+    // Return mock interface matching Supabase postgrest response
+    return {
+      data: results,
+      error: null,
+      select: () => ({
+        single: () => ({
+          data: results[0] || null,
+          error: results[0] ? null : { message: "No row returned" }
+        })
+      })
+    };
+  }
+
+  // Update operation
+  async update(row: any) {
+    const getLocalFallback = (table: string, defaults: any[]) => {
+      const key = `dermshield_local_table_${table}`;
+      const local = localStorage.getItem(key);
+      if (local) {
+        try { return JSON.parse(local); } catch {}
+      }
+      localStorage.setItem(key, JSON.stringify(defaults));
+      return defaults;
+    };
+
+    try {
+      if (this.tableName === "profiles") {
+        const idFilter = this.filters.find(f => f.field === "id");
+        if (idFilter && row.is_verified !== undefined) {
+          try {
+            const res = await fetch("/api/admin/verify-doctor", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ doctorId: idFilter.value, verify: row.is_verified })
+            });
+            if (!res.ok) throw new Error("API failed");
+          } catch {
+            console.warn("Verify Doctor API failed, updating locally:");
+            const profiles = getLocalFallback("profiles", DEFAULT_FALLBACK_PROFILES);
+            const updated = profiles.map((p: any) => {
+              if (p.id === idFilter.value) {
+                return { ...p, isVerified: row.is_verified };
+              }
+              return p;
+            });
+            localStorage.setItem("dermshield_local_table_profiles", JSON.stringify(updated));
+          }
+          return { data: [row], error: null };
+        }
+      }
+
+      if (this.tableName === "scans") {
+        const idFilter = this.filters.find(f => f.field === "id");
+        if (idFilter && row.doctor_verdict !== undefined) {
+          const verdictObj = row.doctor_verdict;
+          try {
+            const res = await fetch(`/api/scans/${idFilter.value}/verdict`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                verdict: verdictObj.status,
+                notes: verdictObj.notes,
+                doctorId: verdictObj.doctorId,
+                doctorName: verdictObj.doctorName
+              })
+            });
+            if (!res.ok) throw new Error("Verdict API failed");
+          } catch {
+            console.warn("Verdict API failed, updating locally:");
+            const scans = getLocalFallback("scans", DEFAULT_FALLBACK_SCANS);
+            const updated = scans.map((s: any) => {
+              if (s.id === idFilter.value) {
+                return { ...s, status: "reviewed", doctorVerdict: verdictObj };
+              }
+              return s;
+            });
+            localStorage.setItem("dermshield_local_table_scans", JSON.stringify(updated));
+          }
+          return { data: [row], error: null };
+        }
+      }
+
+      // Local storage fallback updates
+      const localData = localStorage.getItem(`dermshield_table_${this.tableName}`);
+      if (localData) {
+        let tableData = JSON.parse(localData);
+        for (const filter of this.filters) {
+          tableData = tableData.map((item: any) => {
+            if (String(item[filter.field]) === String(filter.value)) {
+              return { ...item, ...row };
+            }
+            return item;
+          });
+        }
+        localStorage.setItem(`dermshield_table_${this.tableName}`, JSON.stringify(tableData));
+      }
+    } catch (err: any) {
+      console.error(`Mock database update failed in table ${this.tableName}:`, err);
+      return { data: null, error: err };
+    }
+
+    return { data: [row], error: null };
   }
 }
 
-// Authentication implementation
-const authListeners: Array<(event: string, session: any) => void> = [];
+export const supabase: any = {
+  auth: {
+    async getSession() {
+      const activeSession = getLocalSession();
+      return { data: { session: activeSession }, error: null };
+    },
 
-const mockAuth = {
-  async getSession() {
-    const sessionStr = sessionStorage.getItem("supabase_session") || localStorage.getItem("supabase_session");
-    if (!sessionStr) return { data: { session: null }, error: null };
-    try {
-      const session = JSON.parse(sessionStr);
-      return { data: { session }, error: null };
-    } catch {
-      return { data: { session: null }, error: null };
-    }
-  },
+    onAuthStateChange(callback: (event: string, session: Session | null) => void) {
+      authListeners.push(callback);
+      // Immediately run callback with current session
+      const current = getLocalSession();
+      callback("SIGNED_IN", current);
 
-  onAuthStateChange(callback: (event: string, session: any) => void) {
-    authListeners.push(callback);
-    this.getSession().then(({ data: { session } }) => {
-      callback("SIGNED_IN", session);
-    });
-    return {
-      data: {
-        subscription: {
-          unsubscribe() {
-            const index = authListeners.indexOf(callback);
-            if (index !== -1) authListeners.splice(index, 1);
+      return {
+        data: {
+          subscription: {
+            unsubscribe() {
+              const idx = authListeners.indexOf(callback);
+              if (idx !== -1) authListeners.splice(idx, 1);
+            }
           }
         }
-      }
-    };
-  },
+      };
+    },
 
-  async signUp({ email, password, options }: any) {
-    const store = getLocalStore();
-    const profiles = store.profiles || [];
+    async signUp(params: any) {
+      const { email, options } = params;
+      const data = options?.data || {};
 
-    const existing = profiles.find((p: any) => p.email.toLowerCase() === email.toLowerCase());
-    if (existing) {
-      return { data: { user: null }, error: { message: "Email already exists" } };
-    }
+      const getLocalFallback = (table: string, defaults: any[]) => {
+        const key = `dermshield_local_table_${table}`;
+        const local = localStorage.getItem(key);
+        if (local) {
+          try { return JSON.parse(local); } catch {}
+        }
+        localStorage.setItem(key, JSON.stringify(defaults));
+        return defaults;
+      };
 
-    const id = "u-" + Math.random().toString(36).substring(2, 9);
-    const isDoctor = options?.data?.role === "doctor";
-    const newProfile = {
-      id,
-      email: email.toLowerCase(),
-      name: options?.data?.name || email.split("@")[0],
-      role: options?.data?.role || "patient",
-      medical_license: isDoctor ? `LIC-${Math.floor(10000 + Math.random() * 90000)}-MED` : undefined,
-      is_verified: isDoctor ? false : undefined,
-      registration_date: new Date().toISOString()
-    };
-
-    profiles.push(newProfile);
-    store.profiles = profiles;
-    saveLocalStore(store);
-
-    const user = { id, email: email.toLowerCase(), user_metadata: options?.data || {} };
-    const session = { user, access_token: "mock-token-" + id };
-
-    sessionStorage.setItem("supabase_session", JSON.stringify(session));
-    localStorage.setItem("supabase_session", JSON.stringify(session));
-
-    authListeners.forEach(l => l("SIGNED_IN", session));
-
-    return { data: { user, session }, error: null };
-  },
-
-  async signInWithPassword({ email, password }: any) {
-    const store = getLocalStore();
-    const profiles = store.profiles || [];
-
-    const profile = profiles.find((p: any) => p.email.toLowerCase() === email.toLowerCase());
-    if (!profile) {
-      return { data: { user: null, session: null }, error: { message: "Invalid login credentials" } };
-    }
-
-    const user = { id: profile.id, email: email.toLowerCase(), user_metadata: { name: profile.name, role: profile.role } };
-    const session = { user, access_token: "mock-token-" + profile.id };
-
-    sessionStorage.setItem("supabase_session", JSON.stringify(session));
-    localStorage.setItem("supabase_session", JSON.stringify(session));
-
-    authListeners.forEach(l => l("SIGNED_IN", session));
-
-    return { data: { user, session }, error: null };
-  },
-
-  async signOut() {
-    sessionStorage.removeItem("supabase_session");
-    localStorage.removeItem("supabase_session");
-    authListeners.forEach(l => l("SIGNED_OUT", null));
-    return { error: null };
-  },
-
-  async resend({ email, type }: any) {
-    return { error: null };
-  }
-};
-
-// Main Export Client
-export const supabase = {
-  auth: mockAuth,
-
-  from(table: string) {
-    return new MockQueryBuilder(table);
-  },
-
-  channel(name: string) {
-    const userId = name.replace("notifications-", "");
-    const onHandlers: Array<{ event: string; table: string; callback: (payload: any) => void }> = [];
-
-    return {
-      on(event: string, filterObj: any, callback: (payload: any) => void) {
-        onHandlers.push({ event: filterObj.event, table: filterObj.table, callback });
-        return this;
-      },
-      subscribe() {
-        onHandlers.forEach((handler) => {
-          realtimeListeners.push({
-            channelName: name,
-            table: handler.table,
-            userId,
-            callback: handler.callback,
+      try {
+        let registeredUser;
+        try {
+          const res = await fetch("/api/auth/register", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              email,
+              name: data.name || email.split("@")[0],
+              role: data.role || "patient",
+              medicalLicense: data.medicalLicense
+            })
           });
-        });
-        return this;
+
+          if (!res.ok) {
+            const errData = await res.json();
+            throw new Error(errData.error || "Failed to register");
+          }
+          const registered = await res.json();
+          registeredUser = registered.user;
+
+          // Sync into local profiles
+          const profiles = getLocalFallback("profiles", DEFAULT_FALLBACK_PROFILES);
+          if (!profiles.some((p: any) => p.id === registeredUser.id)) {
+            profiles.push(registeredUser);
+            localStorage.setItem("dermshield_local_table_profiles", JSON.stringify(profiles));
+          }
+        } catch (err) {
+          console.warn("Register API failed, registering locally:", err);
+          const id = "u-" + Math.random().toString(36).substring(2, 9);
+          registeredUser = {
+            id,
+            email,
+            name: data.name || email.split("@")[0],
+            role: data.role || "patient",
+            medicalLicense: data.medicalLicense,
+            isVerified: data.role === "patient" ? true : false,
+            registrationDate: new Date().toISOString()
+          };
+
+          const profiles = getLocalFallback("profiles", DEFAULT_FALLBACK_PROFILES);
+          profiles.push(registeredUser);
+          localStorage.setItem("dermshield_local_table_profiles", JSON.stringify(profiles));
+        }
+
+        const sessionMock = {
+          user: {
+            id: registeredUser.id,
+            email: registeredUser.email,
+            user_metadata: { name: registeredUser.name, role: registeredUser.role }
+          },
+          access_token: "mock-jwt-token"
+        };
+
+        setLocalSession(sessionMock);
+        authListeners.forEach(listener => listener("SIGNED_IN", sessionMock as any));
+
+        return { data: { user: sessionMock.user, session: sessionMock }, error: null };
+      } catch (err: any) {
+        return { data: { user: null, session: null }, error: err };
       }
-    };
+    },
+
+    async signInWithPassword(params: any) {
+      const { email, password } = params;
+
+      const getLocalFallback = (table: string, defaults: any[]) => {
+        const key = `dermshield_local_table_${table}`;
+        const local = localStorage.getItem(key);
+        if (local) {
+          try { return JSON.parse(local); } catch {}
+        }
+        localStorage.setItem(key, JSON.stringify(defaults));
+        return defaults;
+      };
+
+      try {
+        let loggedUser;
+        try {
+          const res = await fetch("/api/auth/login", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ email, password })
+          });
+
+          if (!res.ok) {
+            const errData = await res.json();
+            throw new Error(errData.error || "Login failed");
+          }
+
+          const loggedIn = await res.json();
+          loggedUser = loggedIn.user;
+        } catch (err) {
+          console.warn("Login API failed, attempting local auth fallback:", err);
+          const profiles = getLocalFallback("profiles", DEFAULT_FALLBACK_PROFILES);
+          const match = profiles.find((p: any) => p.email.toLowerCase() === email.toLowerCase());
+          if (!match) {
+            throw new Error("No local user found matching this email. Please register or try again.");
+          }
+          loggedUser = match;
+        }
+
+        const sessionMock = {
+          user: {
+            id: loggedUser.id,
+            email: loggedUser.email,
+            user_metadata: { name: loggedUser.name, role: loggedUser.role }
+          },
+          access_token: "mock-jwt-token"
+        };
+
+        setLocalSession(sessionMock);
+        authListeners.forEach(listener => listener("SIGNED_IN", sessionMock as any));
+
+        return { data: { user: sessionMock.user, session: sessionMock }, error: null };
+      } catch (err: any) {
+        return { data: { user: null, session: null }, error: err };
+      }
+    },
+
+    async signOut() {
+      setLocalSession(null);
+      authListeners.forEach(listener => listener("SIGNED_OUT", null));
+      return { error: null };
+    },
+
+    async resend(params: any) {
+      return { data: { message: "Dispatched verification email." }, error: null };
+    }
   },
 
-  removeChannel(channel: any) {
-    const idx = realtimeListeners.findIndex((l) => l.channelName === channel?.channelName);
-    if (idx !== -1) {
-      realtimeListeners.splice(idx, 1);
-    }
+  from(tableName: string) {
+    return new SupabaseQueryBuilder(tableName);
   }
 };
