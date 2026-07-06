@@ -1692,7 +1692,13 @@ export default function PatientDashboard({ user }: PatientDashboardProps) {
                   className="px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold outline-none focus:ring-1 focus:ring-cyan-500 text-slate-700 capitalize cursor-pointer"
                 >
                   <option value="all">📍 All Body Locations</option>
-                  {Array.from(new Set(scans.map(s => s.bodyLocation).filter(Boolean))).map(loc => (
+                  {Array.from(
+  new Set(
+    scans
+      .map(s => s.bodyLocation)
+      .filter((loc): loc is string => typeof loc === "string")
+  )
+).map((loc) => (
                     <option key={loc} value={loc.toLowerCase()}>{loc}</option>
                   ))}
                 </select>
