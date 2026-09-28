@@ -190,11 +190,13 @@ export default function DoctorDashboard({ user }: DoctorDashboardProps) {
         if (referralError) throw referralError;
       }
 
+      // 3. Tell the patient (real-time toast + bell)
       await notifyUser(
         selectedScan.patientId,
         "verdict",
         `${user.name} has reviewed your scan (${selectedScan.predictedClass}). Verdict: ${verdict}.`
       );
+
       setVerdictSuccess(true);
       setTimeout(() => {
         setVerdictSuccess(false);
@@ -233,6 +235,7 @@ export default function DoctorDashboard({ user }: DoctorDashboardProps) {
           `Your consultation with ${user.name} is confirmed for ${new Date(scheduledAt).toLocaleString()}.`
         );
       }
+
       setConfirmingConsultId(null);
       setConfirmDate("");
       setConfirmTime("");
@@ -260,6 +263,7 @@ export default function DoctorDashboard({ user }: DoctorDashboardProps) {
           `Your consultation with ${user.name} is complete. Check the follow-up notes in Specialist & Referrals.`
         );
       }
+
       setCompletingConsultId(null);
       setCompletionNotes("");
       loadDoctorData();
@@ -323,6 +327,7 @@ export default function DoctorDashboard({ user }: DoctorDashboardProps) {
     ? Math.round((reviewedCases.filter(s => s.doctorVerdict?.status === "Agree").length / reviewedCases.length) * 100)
     : 0;
 
+  // Unverified doctors must not access the clinical queue until an admin approves the license
   if (!user.isVerified) {
     return (
       <div className="min-h-[calc(100vh-104px)] flex items-center justify-center bg-slate-50 p-6" id="doctor-pending-verification">
