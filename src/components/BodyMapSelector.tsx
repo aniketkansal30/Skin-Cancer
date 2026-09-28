@@ -2,62 +2,91 @@ import React, { useState } from "react";
 
 // -----------------------------------------------------------------------
 // BodyMapSelector
-// A simple clickable human-silhouette SVG that lets a patient tag WHERE
-// on their body a mole/lesion is located. Emits a location string like
-// "Left Forearm" or "Upper Back" via onSelect.
+// Clickable body silhouette so a patient can tag WHERE a mole/lesion is.
+// Emits a label like "Left Forearm" or "Upper Back" via onSelect.
 //
-// USAGE (inside PatientDashboard "new_scan" step, before/after image upload):
-//
-//   import BodyMapSelector from "./BodyMapSelector";
-//   const [bodyLocation, setBodyLocation] = useState<string>("");
-//   <BodyMapSelector value={bodyLocation} onSelect={setBodyLocation} />
-//
-// Then include `bodyLocation` in the Supabase insert for the `scans` table
-// (add a `body_location text` column — see the SQL migration file).
+// FIX: Left/Right now follow ANATOMICAL convention (the patient's own left/right).
+//   - Front view: the viewer's left side of the picture is the patient's RIGHT.
+//   - Back view:  the viewer's left side of the picture is the patient's LEFT.
+// Previously the labels were mirrored (wrong side would reach the doctor).
+// The back view also now has shoulders, forearms, hands, neck and feet.
 // -----------------------------------------------------------------------
 
 interface BodyRegion {
   id: string;
   label: string;
-  // Simple rect/circle hitboxes on a 200x400 viewBox silhouette
   cx: number;
   cy: number;
   r: number;
 }
 
-const FRONT_REGIONS: BodyRegion[] = [
-  { id: "head", label: "Face / Scalp", cx: 100, cy: 30, r: 18 },
-  { id: "neck", label: "Neck", cx: 100, cy: 55, r: 10 },
-  { id: "chest", label: "Chest", cx: 100, cy: 90, r: 22 },
-  { id: "l_shoulder", label: "Left Shoulder", cx: 65, cy: 70, r: 12 },
-  { id: "r_shoulder", label: "Right Shoulder", cx: 135, cy: 70, r: 12 },
-  { id: "l_arm", label: "Left Upper Arm", cx: 55, cy: 110, r: 12 },
-  { id: "r_arm", label: "Right Upper Arm", cx: 145, cy: 110, r: 12 },
-  { id: "l_forearm", label: "Left Forearm", cx: 48, cy: 155, r: 11 },
-  { id: "r_forearm", label: "Right Forearm", cx: 152, cy: 155, r: 11 },
-  { id: "l_hand", label: "Left Hand", cx: 42, cy: 195, r: 10 },
-  { id: "r_hand", label: "Right Hand", cx: 158, cy: 195, r: 10 },
-  { id: "abdomen", label: "Abdomen", cx: 100, cy: 130, r: 20 },
-  { id: "l_thigh", label: "Left Thigh", cx: 85, cy: 220, r: 14 },
-  { id: "r_thigh", label: "Right Thigh", cx: 115, cy: 220, r: 14 },
-  { id: "l_shin", label: "Left Lower Leg", cx: 85, cy: 290, r: 12 },
-  { id: "r_shin", label: "Right Lower Leg", cx: 115, cy: 290, r: 12 },
-  { id: "l_foot", label: "Left Foot", cx: 85, cy: 350, r: 10 },
-  { id: "r_foot", label: "Right Foot", cx: 115, cy: 350, r: 10 },
+interface RegionSpec {
+  key: string;
+  name: string;
+  cy: number;
+  r: number;
+  dx?: number; // if set -> a left/right pair placed at 100 -/+ dx
+}
+
+const FRONT_SPECS: RegionSpec[] = [
+  { key: "head", name: "Face / Scalp", cy: 30, r: 18 },
+  { key: "neck", name: "Neck", cy: 55, r: 10 },
+  { key: "chest", name: "Chest", cy: 90, r: 22 },
+  { key: "abdomen", name: "Abdomen", cy: 130, r: 20 },
+  { key: "shoulder", name: "Shoulder", cy: 70, r: 12, dx: 35 },
+  { key: "arm", name: "Upper Arm", cy: 110, r: 12, dx: 45 },
+  { key: "forearm", name: "Forearm", cy: 155, r: 11, dx: 52 },
+  { key: "hand", name: "Hand", cy: 195, r: 10, dx: 58 },
+  { key: "thigh", name: "Thigh", cy: 220, r: 14, dx: 15 },
+  { key: "shin", name: "Lower Leg", cy: 290, r: 12, dx: 15 },
+  { key: "foot", name: "Foot", cy: 350, r: 10, dx: 15 },
 ];
 
-const BACK_REGIONS: BodyRegion[] = [
-  { id: "scalp_back", label: "Back of Head", cx: 100, cy: 30, r: 18 },
-  { id: "upper_back", label: "Upper Back", cx: 100, cy: 90, r: 24 },
-  { id: "lower_back", label: "Lower Back", cx: 100, cy: 135, r: 20 },
-  { id: "l_arm_back", label: "Left Upper Arm (Back)", cx: 55, cy: 110, r: 12 },
-  { id: "r_arm_back", label: "Right Upper Arm (Back)", cx: 145, cy: 110, r: 12 },
-  { id: "glutes", label: "Glutes", cx: 100, cy: 175, r: 18 },
-  { id: "l_thigh_back", label: "Left Thigh (Back)", cx: 85, cy: 220, r: 14 },
-  { id: "r_thigh_back", label: "Right Thigh (Back)", cx: 115, cy: 220, r: 14 },
-  { id: "l_calf", label: "Left Calf", cx: 85, cy: 290, r: 12 },
-  { id: "r_calf", label: "Right Calf", cx: 115, cy: 290, r: 12 },
+const BACK_SPECS: RegionSpec[] = [
+  { key: "scalp_back", name: "Back of Head", cy: 30, r: 18 },
+  { key: "neck_back", name: "Back of Neck", cy: 55, r: 10 },
+  { key: "upper_back", name: "Upper Back", cy: 90, r: 22 },
+  { key: "lower_back", name: "Lower Back", cy: 135, r: 20 },
+  { key: "glutes", name: "Glutes", cy: 175, r: 18 },
+  { key: "shoulder_back", name: "Shoulder (Back)", cy: 70, r: 12, dx: 35 },
+  { key: "arm_back", name: "Upper Arm (Back)", cy: 110, r: 12, dx: 45 },
+  { key: "forearm_back", name: "Forearm (Back)", cy: 155, r: 11, dx: 52 },
+  { key: "hand_back", name: "Hand (Back)", cy: 195, r: 10, dx: 58 },
+  { key: "thigh_back", name: "Thigh (Back)", cy: 220, r: 14, dx: 15 },
+  { key: "calf", name: "Calf", cy: 290, r: 12, dx: 15 },
+  { key: "foot_back", name: "Foot (Heel / Sole)", cy: 350, r: 10, dx: 15 },
 ];
+
+function buildRegions(view: "front" | "back"): BodyRegion[] {
+  const specs = view === "front" ? FRONT_SPECS : BACK_SPECS;
+  const regions: BodyRegion[] = [];
+
+  specs.forEach((s) => {
+    if (!s.dx) {
+      regions.push({ id: `${view}-${s.key}`, label: s.name, cx: 100, cy: s.cy, r: s.r });
+      return;
+    }
+    (["viewerLeft", "viewerRight"] as const).forEach((pos) => {
+      const cx = pos === "viewerLeft" ? 100 - s.dx! : 100 + s.dx!;
+      const patientSide =
+        view === "front"
+          ? pos === "viewerLeft" ? "Right" : "Left"
+          : pos === "viewerLeft" ? "Left" : "Right";
+      regions.push({
+        id: `${view}-${s.key}-${pos}`,
+        label: `${patientSide} ${s.name}`,
+        cx,
+        cy: s.cy,
+        r: s.r,
+      });
+    });
+  });
+
+  return regions;
+}
+
+const FRONT_REGIONS = buildRegions("front");
+const BACK_REGIONS = buildRegions("back");
 
 interface BodyMapSelectorProps {
   value?: string;
@@ -68,12 +97,13 @@ export default function BodyMapSelector({ value, onSelect }: BodyMapSelectorProp
   const [view, setView] = useState<"front" | "back">("front");
   const [hovered, setHovered] = useState<string | null>(null);
   const regions = view === "front" ? FRONT_REGIONS : BACK_REGIONS;
+  const hoveredLabel = regions.find((r) => r.id === hovered)?.label;
 
   return (
     <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-5 space-y-4">
       <div className="flex justify-between items-center">
         <span className="text-[10px] font-bold text-cyan-700 uppercase tracking-wider">
-          Step: Tag Lesion Body Location
+          Tag Lesion Body Location
         </span>
         <div className="flex bg-slate-100 rounded-lg p-0.5 text-[10px] font-bold">
           <button
@@ -99,21 +129,16 @@ export default function BodyMapSelector({ value, onSelect }: BodyMapSelectorProp
 
       <div className="flex justify-center">
         <svg viewBox="0 0 200 400" className="h-72 w-auto">
-          {/* Simple silhouette outline */}
+          {/* Silhouette */}
           <ellipse cx="100" cy="30" rx="18" ry="20" fill="#e2e8f0" />
           <rect x="80" y="48" width="40" height="20" rx="8" fill="#e2e8f0" />
-          <path
-            d="M 55 65 Q 100 55 145 65 L 150 160 Q 100 175 50 160 Z"
-            fill="#e2e8f0"
-          />
-          {/* arms */}
+          <path d="M 55 65 Q 100 55 145 65 L 150 160 Q 100 175 50 160 Z" fill="#e2e8f0" />
           <rect x="35" y="70" width="20" height="130" rx="10" fill="#e2e8f0" />
           <rect x="145" y="70" width="20" height="130" rx="10" fill="#e2e8f0" />
-          {/* legs */}
           <rect x="72" y="160" width="26" height="200" rx="12" fill="#e2e8f0" />
           <rect x="102" y="160" width="26" height="200" rx="12" fill="#e2e8f0" />
 
-          {/* Clickable region hotspots */}
+          {/* Clickable hotspots */}
           {regions.map((region) => {
             const isSelected = value === region.label;
             const isHovered = hovered === region.id;
@@ -140,16 +165,17 @@ export default function BodyMapSelector({ value, onSelect }: BodyMapSelectorProp
         </svg>
       </div>
 
-      <div className="text-center">
+      <div className="text-center space-y-1">
         {value ? (
           <span className="inline-flex items-center gap-1.5 text-xs font-bold text-teal-800 bg-teal-50 border border-teal-100 px-3 py-1.5 rounded-full">
             📍 {value}
           </span>
         ) : (
           <span className="text-[11px] text-slate-400">
-            Tap a region above to mark where the mole is located
+            {hoveredLabel || "Tap a region above to mark where the mole is located"}
           </span>
         )}
+        <p className="text-[10px] text-slate-400">Left / Right refer to your own body.</p>
       </div>
     </div>
   );

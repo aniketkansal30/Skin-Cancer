@@ -16,7 +16,9 @@ function exportToCsv(filename: string, rows: Record<string, any>[]) {
 
   const headers = Object.keys(rows[0]);
   const escapeCell = (value: any) => {
-    const str = value === null || value === undefined ? "" : String(value);
+    let str = value === null || value === undefined ? "" : String(value);
+    // guard against CSV/Excel formula injection
+    if (/^[=+\-@]/.test(str)) str = "'" + str;
     // Wrap in quotes and escape any existing quotes if the value contains commas/quotes/newlines
     if (str.includes(",") || str.includes('"') || str.includes("\n")) {
       return `"${str.replace(/"/g, '""')}"`;
@@ -29,7 +31,7 @@ function exportToCsv(filename: string, rows: Record<string, any>[]) {
     ...rows.map((row) => headers.map((h) => escapeCell(row[h])).join(","))
   ];
 
-  const blob = new Blob([csvLines.join("\n")], { type: "text/csv;charset=utf-8;" });
+  const blob = new Blob(["\uFEFF" + csvLines.join("\r\n")], { type: "text/csv;charset=utf-8;" });
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;

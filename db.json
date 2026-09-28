@@ -31,7 +31,16 @@
       "role": "admin",
       "name": "Platform Administrator",
       "registrationDate": "2026-01-01T08:00:00.000Z"
-    }
+    },
+    {
+  "id": "u-patient-another",
+  "email": "rohan@dermshield.com",
+  "role": "patient",
+  "name": "Rohan Verma",
+  "dateOfBirth": "1984-03-12",
+  "registrationDate": "2026-06-20T10:00:00.000Z"
+}
+    
   ],
   "scans": [
     {

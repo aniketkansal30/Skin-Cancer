@@ -9,6 +9,7 @@ import { User, ScanResult, Consultation } from "../types";
 import GradCamCanvas from "./GradCamCanvas";
 import DoctorProfileTab from "./DoctorProfileTab";
 import { supabase } from "../lib/supabaseClient";
+import { notifyUser } from "../lib/notify";
 import { 
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, 
   Tooltip, Legend, PieChart, Pie, Cell, LineChart, Line, CartesianGrid
@@ -37,6 +38,7 @@ export default function DoctorDashboard({ user }: DoctorDashboardProps) {
   const [verdictNotes, setVerdictNotes] = useState("");
   const [submittingVerdict, setSubmittingVerdict] = useState(false);
   const [verdictSuccess, setVerdictSuccess] = useState(false);
+  const [verdictError, setVerdictError] = useState("");
   
   // Oncology/Surgical Referral state
   const [needReferral, setNeedReferral] = useState(false);
@@ -148,6 +150,7 @@ export default function DoctorDashboard({ user }: DoctorDashboardProps) {
     if (!selectedScan) return;
 
     setSubmittingVerdict(true);
+    setVerdictError("");
     try {
       // 1. Update the Scan verdict in "scans" table
       const { error: updateError } = await supabase
@@ -187,6 +190,11 @@ export default function DoctorDashboard({ user }: DoctorDashboardProps) {
         if (referralError) throw referralError;
       }
 
+      await notifyUser(
+        selectedScan.patientId,
+        "verdict",
+        `${user.name} has reviewed your scan (${selectedScan.predictedClass}). Verdict: ${verdict}.`
+      );
       setVerdictSuccess(true);
       setTimeout(() => {
         setVerdictSuccess(false);
@@ -199,6 +207,7 @@ export default function DoctorDashboard({ user }: DoctorDashboardProps) {
       }, 1500);
     } catch (err) {
       console.error("Verdict submit failed", err);
+      setVerdictError("Could not save the verdict. Check your connection / permissions and try again.");
     } finally {
       setSubmittingVerdict(false);
     }
@@ -216,6 +225,14 @@ export default function DoctorDashboard({ user }: DoctorDashboardProps) {
 
       if (error) throw error;
 
+      const confirmedConsult = consultations.find((c) => c.id === consultId);
+      if (confirmedConsult) {
+        await notifyUser(
+          confirmedConsult.patientId,
+          "scheduled",
+          `Your consultation with ${user.name} is confirmed for ${new Date(scheduledAt).toLocaleString()}.`
+        );
+      }
       setConfirmingConsultId(null);
       setConfirmDate("");
       setConfirmTime("");
@@ -235,6 +252,14 @@ export default function DoctorDashboard({ user }: DoctorDashboardProps) {
 
       if (error) throw error;
 
+      const completedConsult = consultations.find((c) => c.id === consultId);
+      if (completedConsult) {
+        await notifyUser(
+          completedConsult.patientId,
+          "completed",
+          `Your consultation with ${user.name} is complete. Check the follow-up notes in Specialist & Referrals.`
+        );
+      }
       setCompletingConsultId(null);
       setCompletionNotes("");
       loadDoctorData();
@@ -297,6 +322,23 @@ export default function DoctorDashboard({ user }: DoctorDashboardProps) {
   const agreementRate = reviewedCases.length > 0
     ? Math.round((reviewedCases.filter(s => s.doctorVerdict?.status === "Agree").length / reviewedCases.length) * 100)
     : 0;
+
+  if (!user.isVerified) {
+    return (
+      <div className="min-h-[calc(100vh-104px)] flex items-center justify-center bg-slate-50 p-6" id="doctor-pending-verification">
+        <div className="max-w-md w-full bg-white border border-amber-200 rounded-2xl shadow-md p-8 text-center space-y-4">
+          <div className="h-12 w-12 bg-amber-50 rounded-full flex items-center justify-center text-amber-600 mx-auto">
+            <AlertTriangle className="h-6 w-6" />
+          </div>
+          <h2 className="text-lg font-extrabold text-slate-900">Verification Pending</h2>
+          <p className="text-xs text-slate-500 leading-relaxed">
+            Your medical license is being reviewed by a platform administrator. You will get access to the
+            clinical review queue once it is approved. Please refresh or log in again after approval.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   const getInitials = (name: string) => {
     return name.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2);
@@ -709,6 +751,9 @@ export default function DoctorDashboard({ user }: DoctorDashboardProps) {
                       Submit Dermatological Decision Verdict
                     </h5>
 
+                    {verdictError && (
+                      <div className="p-3 bg-rose-50 border border-rose-200 rounded-lg text-rose-800 text-xs">{verdictError}</div>
+                    )}
                     {verdictSuccess ? (
                       <div className="p-4 bg-teal-50 border border-teal-200 rounded-xl text-center text-teal-900 text-xs flex flex-col items-center gap-2">
                         <CheckCircle className="h-6 w-6 text-teal-600 animate-bounce" />
@@ -1347,8 +1392,8 @@ export default function DoctorDashboard({ user }: DoctorDashboardProps) {
                 <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">AI Concordance</span>
                 <strong className="text-lg font-extrabold text-slate-900">
                   {auditLogs.length > 0 
-                    ? Math.round((auditLogs.filter(l => l.doctorVerdict?.verdict === "Agree").length / auditLogs.length) * 100)
-                    : 100}%
+                    ? Math.round((auditLogs.filter(l => l.doctorVerdict?.status === "Agree").length / auditLogs.length) * 100)
+                    : 0}%
                 </strong>
               </div>
             </div>
@@ -1360,7 +1405,7 @@ export default function DoctorDashboard({ user }: DoctorDashboardProps) {
               <div>
                 <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">Biopsies Instructed</span>
                 <strong className="text-lg font-extrabold text-slate-900">
-                  {auditLogs.filter(l => l.doctorVerdict?.verdict === "Needs Biopsy").length} Cases
+                  {auditLogs.filter(l => l.doctorVerdict?.status === "Needs Biopsy").length} Cases
                 </strong>
               </div>
             </div>
@@ -1395,12 +1440,12 @@ export default function DoctorDashboard({ user }: DoctorDashboardProps) {
                       <tr key={log.id} className="hover:bg-slate-50/50 transition-colors">
                         <td className="p-4 font-mono font-bold text-slate-900">#{log.id.slice(0, 8).toUpperCase()}</td>
                         <td className="p-4">{log.patientName}</td>
-                        <td className="p-4 font-semibold text-slate-800">{log.classLabel}</td>
+                        <td className="p-4 font-semibold text-slate-800">{log.predictedClass}</td>
                         <td className="p-4">
                           <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${
-                            log.riskLevel === "high" 
+                            log.riskLevel === "High" 
                               ? "bg-rose-50 border-rose-100 text-rose-700"
-                              : log.riskLevel === "medium"
+                              : log.riskLevel === "Medium"
                                 ? "bg-amber-50 border-amber-100 text-amber-700"
                                 : "bg-emerald-50 border-emerald-100 text-emerald-700"
                           }`}>
@@ -1409,13 +1454,13 @@ export default function DoctorDashboard({ user }: DoctorDashboardProps) {
                         </td>
                         <td className="p-4">
                           <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${
-                            log.doctorVerdict?.verdict === "Agree" 
+                            log.doctorVerdict?.status === "Agree" 
                               ? "bg-emerald-50 border-emerald-100 text-emerald-700"
-                              : log.doctorVerdict?.verdict === "Needs Biopsy"
+                              : log.doctorVerdict?.status === "Needs Biopsy"
                                 ? "bg-rose-50 border-rose-100 text-rose-700"
                                 : "bg-blue-50 border-blue-100 text-blue-700"
                           }`}>
-                            {log.doctorVerdict?.verdict}
+                            {log.doctorVerdict?.status}
                           </span>
                         </td>
                         <td className="p-4 text-slate-400 font-mono">{log.doctorVerdict?.reviewedAt ? new Date(log.doctorVerdict.reviewedAt).toLocaleDateString() : ""}</td>

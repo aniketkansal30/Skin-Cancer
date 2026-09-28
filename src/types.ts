@@ -26,7 +26,7 @@ export interface HeatmapPoint {
   weight: number; // intensity (0.1 - 1.0)
 }
 
-// NEW — SHAP/LIME-style explainability breakdown
+// SHAP/LIME-style explainability breakdown
 export interface ContributingFactor {
   label: string;
   weight: number; // 0-100
@@ -55,7 +55,6 @@ export interface ScanResult {
     doctorId: string;
     doctorName: string;
   };
-  // NEW fields (all optional — old rows without them keep working)
   bodyLocation?: string;              // e.g. "Left Forearm", from BodyMapSelector
   lesionId?: string;                  // links this scan to a tracked lesion over time
   uncertaintyScore?: number;          // 0-1, higher = model less certain
@@ -89,7 +88,7 @@ export interface InferenceLog {
   errorMessage?: string;
 }
 
-// NEW — a tracked lesion (groups multiple scans of the same mole over time)
+// A tracked lesion (groups multiple scans of the same mole over time)
 export interface Lesion {
   id: string;
   patientId: string;
@@ -98,13 +97,16 @@ export interface Lesion {
   createdAt: string;
 }
 
-// NEW — doctor-to-doctor referral
+// Doctor -> external specialist / oncology clinic referral (matches the `referrals` table)
 export interface Referral {
   id: string;
   scanId: string;
-  referringDoctorId: string;
-  referredToDoctorId: string;
-  reason?: string;
-  status: 'pending' | 'accepted' | 'declined';
+  patientId: string;
+  patientName: string;
+  doctorId: string;
+  doctorName?: string;
+  referringClinic: string;
+  notes?: string;
+  status: 'pending' | 'discharged' | 'completed';
   createdAt: string;
 }

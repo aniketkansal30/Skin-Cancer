@@ -25,69 +25,84 @@ export function useNotifications() {
   return ctx;
 }
 
+const getIcon = (type: AppNotification["type"]) => {
+  if (type === "verdict") return <Stethoscope className="h-4 w-4 text-teal-600" />;
+  if (type === "scheduled") return <CalendarCheck className="h-4 w-4 text-cyan-600" />;
+  return <CheckCircle className="h-4 w-4 text-emerald-600" />;
+};
+
 export function NotificationProvider({ children }: { children: React.ReactNode }) {
   const { currentUser } = useAuth();
+  // Depend on primitives (not the whole user object) so profile edits don't re-subscribe.
+  const userId = currentUser?.id;
+  const userRole = currentUser?.role;
+
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [toasts, setToasts] = useState<AppNotification[]>([]);
 
-  // Step A: Load existing (persisted) notifications on login / app load
+  // Load persisted notifications on login
   useEffect(() => {
-    if (!currentUser || currentUser.role !== "patient") return;
+    if (!userId || userRole !== "patient") {
+      setNotifications([]);
+      return;
+    }
 
     const loadNotifications = async () => {
       const { data, error } = await supabase
         .from("notifications")
         .select("*")
-        .eq("user_id", currentUser.id)
+        .eq("user_id", userId)
         .order("created_at", { ascending: false })
         .limit(50);
 
-      if (!error && data) {
-        setNotifications(data as AppNotification[]);
-      }
+      if (!error && data) setNotifications(data as AppNotification[]);
     };
 
     loadNotifications();
-  }, [currentUser]);
+  }, [userId, userRole]);
 
-  // Step B: Listen for new notifications in real-time
+  // Real-time listener for new notifications
   useEffect(() => {
-    if (!currentUser || currentUser.role !== "patient") return;
+    if (!userId || userRole !== "patient") return;
+
+    const timers: ReturnType<typeof setTimeout>[] = [];
 
     const channel = supabase
-      .channel(`notifications-${currentUser.id}`)
+      .channel(`notifications-${userId}`)
       .on(
         "postgres_changes",
         {
           event: "INSERT",
           schema: "public",
           table: "notifications",
-          filter: `user_id=eq.${currentUser.id}`
+          filter: `user_id=eq.${userId}`
         },
         (payload: any) => {
           const newNotif = payload.new as AppNotification;
           setNotifications((prev) => [newNotif, ...prev].slice(0, 50));
           setToasts((prev) => [...prev, newNotif]);
-
-          setTimeout(() => {
-            setToasts((prev) => prev.filter((t) => t.id !== newNotif.id));
-          }, 6000);
+          timers.push(
+            setTimeout(() => {
+              setToasts((prev) => prev.filter((t) => t.id !== newNotif.id));
+            }, 6000)
+          );
         }
       )
       .subscribe();
 
     return () => {
+      timers.forEach(clearTimeout);
       supabase.removeChannel(channel);
     };
-  }, [currentUser]);
+  }, [userId, userRole]);
 
   const markAllRead = async () => {
     setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
-    if (currentUser) {
+    if (userId) {
       await supabase
         .from("notifications")
         .update({ read: true })
-        .eq("user_id", currentUser.id)
+        .eq("user_id", userId)
         .eq("read", false);
     }
   };
@@ -98,17 +113,11 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     setToasts((prev) => prev.filter((t) => t.id !== id));
   };
 
-  const getIcon = (type: AppNotification["type"]) => {
-    if (type === "verdict") return <Stethoscope className="h-4 w-4 text-teal-600" />;
-    if (type === "scheduled") return <CalendarCheck className="h-4 w-4 text-cyan-600" />;
-    return <CheckCircle className="h-4 w-4 text-emerald-600" />;
-  };
-
   return (
     <NotificationContext.Provider value={{ notifications, unreadCount, markAllRead }}>
       {children}
 
-      {/* Toast Stack - fixed top-right */}
+      {/* Toast stack - fixed top-right */}
       <div className="fixed top-4 right-4 z-[100] space-y-2 w-full max-w-sm px-4 sm:px-0">
         {toasts.map((t) => (
           <div
@@ -140,12 +149,6 @@ export function NotificationBell() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  const getIcon = (type: AppNotification["type"]) => {
-    if (type === "verdict") return <Stethoscope className="h-4 w-4 text-teal-600" />;
-    if (type === "scheduled") return <CalendarCheck className="h-4 w-4 text-cyan-600" />;
-    return <CheckCircle className="h-4 w-4 text-emerald-600" />;
-  };
-
   return (
     <div className="relative" ref={ref}>
       <button
@@ -164,13 +167,13 @@ export function NotificationBell() {
       </button>
 
       {open && (
-        <div className="absolute right-0 mt-2 w-80 bg-white border border-slate-200 rounded-xl shadow-xl z-50 overflow-hidden">
+        <div className="absolute right-0 mt-2 w-80 max-w-[calc(100vw-2rem)] bg-white border border-slate-200 rounded-xl shadow-xl z-50 overflow-hidden">
           <div className="p-3 border-b border-slate-100">
             <span className="text-xs font-bold text-slate-800">Notifications</span>
           </div>
           <div className="max-h-80 overflow-y-auto divide-y divide-slate-100">
             {notifications.length === 0 ? (
-              <div className="p-6 text-center text-slate-400 text-xs">Koi notification nahi hai</div>
+              <div className="p-6 text-center text-slate-400 text-xs">No notifications yet</div>
             ) : (
               notifications.map((n) => (
                 <div key={n.id} className={`p-3 flex items-start gap-2.5 hover:bg-slate-50/50 ${!n.read ? "bg-cyan-50/40" : ""}`}>

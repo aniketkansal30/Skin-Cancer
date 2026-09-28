@@ -91,7 +91,13 @@ export default function LandingPage() {
     }
 
     setLoading(true);
-    const { error: signUpError } = await signUp(email, password, name, roleSelection);
+    const { error: signUpError } = await signUp(
+      email,
+      password,
+      name,
+      roleSelection,
+      roleSelection === "doctor" ? license.trim() : undefined
+    );
     setLoading(false);
 
     if (signUpError) {
@@ -127,24 +133,24 @@ export default function LandingPage() {
                 Deep Learning Guided <span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-600 to-teal-500">Skin Cancer Screening</span> Support
               </h1>
               <p className="text-slate-600 text-lg leading-relaxed max-w-2xl">
-                A clinically-validated decision support prototype combining 
+                A decision support research prototype combining 
                 <strong> Convolutional Neural Networks (CNN)</strong> for local pigment spatial extraction and 
                 <strong> Vision Transformers (ViT)</strong> with Swish activations for macroscopic global context. 
-                Trained on over 45,000 dermoscopic records from HAM10000, ISIC2019, Fitzpatrick17k, and PAD-UFES-20.
+                Being trained on public dermoscopic datasets (HAM10000, ISIC2019, Fitzpatrick17k, PAD-UFES-20). Final performance metrics will be published after evaluation.
               </p>
 
               {/* Research Model Stats Grid */}
               <div className="grid grid-cols-3 gap-4 py-4 max-w-xl">
                 <div className="bg-slate-50 border border-slate-100 p-4 rounded-xl text-center">
-                  <div className="text-2xl sm:text-3xl font-bold text-cyan-700">94.8%</div>
+                  <div className="text-2xl sm:text-3xl font-bold text-cyan-700">TBD</div>
                   <div className="text-xs text-slate-500 font-medium">Model Accuracy</div>
                 </div>
                 <div className="bg-slate-50 border border-slate-100 p-4 rounded-xl text-center">
-                  <div className="text-2xl sm:text-3xl font-bold text-emerald-600">92.1%</div>
+                  <div className="text-2xl sm:text-3xl font-bold text-emerald-600">TBD</div>
                   <div className="text-xs text-slate-500 font-medium">Precision Score</div>
                 </div>
                 <div className="bg-slate-50 border border-slate-100 p-4 rounded-xl text-center">
-                  <div className="text-2xl sm:text-3xl font-bold text-indigo-600">93.5%</div>
+                  <div className="text-2xl sm:text-3xl font-bold text-indigo-600">TBD</div>
                   <div className="text-xs text-slate-500 font-medium">Recall Rate</div>
                 </div>
               </div>
@@ -252,8 +258,8 @@ export default function LandingPage() {
                   {isRegistering && (
                     <div>
                       <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">Select Access Role</label>
-                      <div className="grid grid-cols-3 gap-2">
-                        {(["patient", "doctor", "admin"] as UserRole[]).map((r) => (
+                      <div className="grid grid-cols-2 gap-2">
+                        {(["patient", "doctor"] as UserRole[]).map((r) => (
                           <button
                             key={r}
                             type="button"

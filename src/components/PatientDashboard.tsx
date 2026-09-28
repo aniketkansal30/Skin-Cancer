@@ -26,6 +26,7 @@ interface PatientDashboardProps {
 // pipeline (Grad-CAM viewer, PDF report, doctor review, admin stats) all
 // work end-to-end on real Supabase data right now.
 // ---------------------------------------------------------------------------
+const DEMO_MODE = true; // set to false once the real CNN+ViT model is wired up
 const MOCK_CLASSES = [
   {
     predictedClass: "Melanocytic Nevus", acronym: "NV", riskLevel: "Low" as const,
@@ -238,13 +239,40 @@ export default function PatientDashboard({ user }: PatientDashboardProps) {
   // Handle local image file selection
   const handleImageFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onload = () => {
-        setSelectedImage(reader.result as string);
-      };
-      reader.readAsDataURL(file);
+    if (!file) return;
+
+    if (!file.type.startsWith("image/")) {
+      setAnalysisError("Please choose a valid image file (PNG or JPEG).");
+      return;
     }
+    if (file.size > 10 * 1024 * 1024) {
+      setAnalysisError("Image is larger than 10MB. Please choose a smaller photo.");
+      return;
+    }
+    setAnalysisError("");
+
+    // Downscale to max 1024px + JPEG so the base64 stored in the DB stays small (~100-250KB)
+    const reader = new FileReader();
+    reader.onload = () => {
+      const img = new Image();
+      img.onload = () => {
+        const MAX = 1024;
+        const scale = Math.min(1, MAX / Math.max(img.width, img.height));
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.round(img.width * scale);
+        canvas.height = Math.round(img.height * scale);
+        const ctx = canvas.getContext("2d");
+        if (!ctx) {
+          setSelectedImage(reader.result as string);
+          return;
+        }
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        setSelectedImage(canvas.toDataURL("image/jpeg", 0.85));
+      };
+      img.onerror = () => setAnalysisError("Could not read this image. Try a different file.");
+      img.src = reader.result as string;
+    };
+    reader.readAsDataURL(file);
   };
 
   // Launch AI Pipeline — runs the mock inference and inserts the result into Supabase
@@ -1245,7 +1273,7 @@ export default function PatientDashboard({ user }: PatientDashboardProps) {
                   </div>
 
                   <div className="space-y-6">
-                    <label className="block text-xs font-bold text-slate-600 uppercase">Step 2: Clinician specimen review checklist</label>
+                    <label className="block text-xs font-bold text-slate-600 uppercase">Step 3: Clinician specimen review checklist</label>
 
                     <div className="bg-slate-50 border border-slate-200/80 p-5 rounded-2xl space-y-4">
                       <span className="block text-[10px] font-bold text-cyan-700 uppercase tracking-wider">
@@ -1526,6 +1554,11 @@ export default function PatientDashboard({ user }: PatientDashboardProps) {
                       </div>
                     )}
 
+                    {DEMO_MODE && (
+                      <div className="p-4 bg-violet-50 border border-violet-200 rounded-xl text-violet-900 text-[10px] leading-relaxed">
+                        <strong>DEMO MODE:</strong> This result comes from a placeholder model used for UI testing. It is NOT a real prediction and must not be used for any health decision.
+                      </div>
+                    )}
                     <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl text-amber-900 text-[10px] leading-relaxed">
                       <strong>DISCLAIMER:</strong> DermShield AI is built as an explainable diagnostic support screening pipeline. It is not licensed to replace direct clinician evaluation. A physical tissue biopsy constitutes the absolute gold standard for complete melanoma confirmation.
                     </div>

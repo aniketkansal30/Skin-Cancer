@@ -7,7 +7,13 @@ interface AuthContextType {
   currentUser: User | null;
   session: Session | null;
   loading: boolean;
-  signUp: (email: string, password: string, name: string, role: UserRole) => Promise<{ error: string | null }>;
+  signUp: (
+    email: string,
+    password: string,
+    name: string,
+    role: UserRole,
+    medicalLicense?: string
+  ) => Promise<{ error: string | null }>;
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
   updateProfile: (updates: Partial<User>) => Promise<void>;
@@ -15,82 +21,109 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-export function AuthProvider({ children }: { children: ReactNode }) {
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [session, setSession] = useState<Session | null>(null);
-  const [loading, setLoading] = useState(true);
+const mapProfile = (data: any): User => ({
+  id: data.id,
+  email: data.email,
+  role: data.role,
+  name: data.name,
+  medicalLicense: data.medical_license || undefined,
+  isVerified: data.is_verified || false,
+  registrationDate: data.registration_date,
+  age: data.age ?? undefined,
+  gender: data.gender ?? undefined,
+  phone: data.phone ?? undefined,
+  emergencyContact: data.emergency_contact ?? undefined,
+  medicalHistory: data.medical_history ?? undefined,
+  specialty: data.specialty ?? undefined,
+  clinicName: data.clinic_name ?? undefined,
+  dob: data.dob ?? undefined,
+  avatarUrl: data.avatar_url ?? undefined
+});
 
-  // Fetch the profile row (name, role, etc.) linked to the auth user
-  const fetchProfile = async (userId: string): Promise<User | null> => {
+// The profile row is created by a DB trigger on signup, so retry briefly if it isn't visible yet.
+const fetchProfile = async (userId: string, retries = 2): Promise<User | null> => {
+  for (let attempt = 0; attempt <= retries; attempt++) {
     const { data, error } = await supabase
       .from("profiles")
       .select("*")
       .eq("id", userId)
       .single();
 
-    if (error || !data) {
-      console.error("Failed to fetch profile", error);
-      return null;
-    }
+    if (data && !error) return mapProfile(data);
+    if (attempt < retries) await new Promise((r) => setTimeout(r, 600));
+    else console.error("Failed to fetch profile", error);
+  }
+  return null;
+};
 
-    return {
-      id: data.id,
-      email: data.email,
-      role: data.role,
-      name: data.name,
-      medicalLicense: data.medical_license || undefined,
-      isVerified: data.is_verified || false,
-      registrationDate: data.registration_date,
-      age: data.age,
-      gender: data.gender,
-      phone: data.phone,
-      emergencyContact: data.emergency_contact,
-      medicalHistory: data.medical_history,
-      specialty: data.specialty,
-      clinicName: data.clinic_name,
-      dob: data.dob,
-      avatarUrl: data.avatar_url
-    };
-  };
+export function AuthProvider({ children }: { children: ReactNode }) {
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [session, setSession] = useState<Session | null>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Load existing session on first mount
-    supabase.auth.getSession().then(async ({ data: { session } }: { data: { session: Session | null } }) => {
-      setSession(session);
-      if (session?.user) {
-        const profile = await fetchProfile(session.user.id);
-        setCurrentUser(profile);
-      }
-      setLoading(false);
-    });
+    let active = true;
 
-    // Listen for login/logout/token-refresh events
-    const { data: listener } = supabase.auth.onAuthStateChange(async (_event: string, session: Session | null) => {
-      setSession(session);
-      if (session?.user) {
-        const profile = await fetchProfile(session.user.id);
-        setCurrentUser(profile);
-      } else {
+    // onAuthStateChange also fires INITIAL_SESSION on mount, so no separate getSession() needed.
+    const { data: listener } = supabase.auth.onAuthStateChange((event: string, newSession: Session | null) => {
+      setSession(newSession);
+
+      if (!newSession?.user) {
         setCurrentUser(null);
+        setLoading(false);
+        return;
       }
+
+      // Hourly token refresh doesn't change the profile - skip the refetch.
+      if (event === "TOKEN_REFRESHED") return;
+
+      // Never await other supabase calls directly inside this callback (can deadlock) - defer it.
+      setTimeout(async () => {
+        const profile = await fetchProfile(newSession.user.id);
+        if (!active) return;
+        setCurrentUser(profile);
+        setLoading(false);
+      }, 0);
     });
 
     return () => {
+      active = false;
       listener.subscription.unsubscribe();
     };
   }, []);
 
-  const signUp = async (email: string, password: string, name: string, role: UserRole) => {
+  const signUp = async (
+    email: string,
+    password: string,
+    name: string,
+    role: UserRole,
+    medicalLicense?: string
+  ) => {
+    // Admin accounts are never self-registered - promote them manually in Supabase.
+    const safeRole: UserRole = role === "doctor" ? "doctor" : "patient";
+
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
       options: {
-        data: { name, role } // picked up by the handle_new_user() trigger in Supabase
+        emailRedirectTo: window.location.origin,
+        // Both key spellings are sent so whichever one your handle_new_user() trigger reads will work.
+        data: {
+          name,
+          role: safeRole,
+          medicalLicense: medicalLicense || null,
+          medical_license: medicalLicense || null
+        }
       }
     });
 
     if (error) return { error: error.message };
     if (!data.user) return { error: "Signup failed. Please try again." };
+
+    // With email confirmation ON, Supabase returns a fake user (no identities) for an existing email.
+    if (data.user.identities && data.user.identities.length === 0) {
+      return { error: "This email is already registered. Please log in instead." };
+    }
 
     return { error: null };
   };
@@ -109,23 +142,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const updateProfile = async (updates: Partial<User>) => {
     if (!currentUser) return;
-    
-    // Map properties to match profiles snake_case keys in DB if needed
-    const dbUpdates: any = {
-      ...updates,
-      medical_license: updates.medicalLicense,
-      is_verified: updates.isVerified,
+
+    // Explicit whitelist -> snake_case. role / is_verified are deliberately NOT editable from the client.
+    const dbUpdates: Record<string, any> = {
+      name: updates.name,
+      age: updates.age,
+      gender: updates.gender,
+      dob: updates.dob === "" ? null : updates.dob,
+      phone: updates.phone,
       emergency_contact: updates.emergencyContact,
       medical_history: updates.medicalHistory,
+      specialty: updates.specialty,
       clinic_name: updates.clinicName,
+      medical_license: updates.medicalLicense,
       avatar_url: updates.avatarUrl
     };
-    
-    // Clean undefined keys
-    Object.keys(dbUpdates).forEach(key => {
-      if (dbUpdates[key] === undefined) {
-        delete dbUpdates[key];
-      }
+
+    Object.keys(dbUpdates).forEach((key) => {
+      if (dbUpdates[key] === undefined) delete dbUpdates[key];
     });
 
     const { error } = await supabase
@@ -133,12 +167,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .update(dbUpdates)
       .eq("id", currentUser.id);
 
-    if (!error) {
-      const profile = await fetchProfile(currentUser.id);
-      setCurrentUser(profile);
-    } else {
+    if (error) {
       console.error("Failed to update profile", error);
+      throw new Error(error.message);
     }
+
+    const profile = await fetchProfile(currentUser.id, 0);
+    if (profile) setCurrentUser(profile);
   };
 
   return (

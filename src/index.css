@@ -4,5 +4,17 @@
 @theme {
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
-}
 
+  /* Used by AIAssistant.tsx (animate-slide-up / animate-spin-once) - were undefined before */
+  --animate-slide-up: slide-up 0.25s ease-out;
+  --animate-spin-once: spin-once 0.35s ease-out;
+
+  @keyframes slide-up {
+    from { opacity: 0; transform: translateY(12px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes spin-once {
+    from { transform: rotate(-90deg); }
+    to { transform: rotate(0deg); }
+  }
+}

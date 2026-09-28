@@ -269,7 +269,7 @@ How can I assist you with your skin health education today?`,
       {/* Floating Chat Window */}
       {isOpen && (
         <div
-          className="fixed bottom-20 right-5 w-[360px] sm:w-[420px] h-[550px] bg-white rounded-2xl border border-slate-200 shadow-2xl z-[100] flex flex-col overflow-hidden animate-slide-up"
+          className="fixed bottom-20 right-5 w-[calc(100vw-2.5rem)] sm:w-[420px] h-[550px] bg-white rounded-2xl border border-slate-200 shadow-2xl z-[100] flex flex-col overflow-hidden animate-slide-up"
           id="floating-chat-card"
         >
           {/* Header */}
