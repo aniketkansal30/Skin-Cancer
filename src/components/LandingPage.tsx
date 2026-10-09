@@ -8,6 +8,7 @@ import {
 import { UserRole } from "../types";
 import { useAuth } from "../AuthContext";
 import { supabase } from "../lib/supabaseClient";
+import ConfusionMatrixExplorer from "./ConfusionMatrixExplorer.tsx";
 
 export default function LandingPage() {
   const { signUp, signIn } = useAuth();
@@ -711,6 +712,11 @@ export default function LandingPage() {
               </table>
             </div>
 
+          </div>
+
+          {/* FEATURE 5: INTERACTIVE 8-CLASS CONFUSION MATRIX & ROC-AUC EXPLORER */}
+          <div className="pt-6">
+            <ConfusionMatrixExplorer />
           </div>
 
         </div>

@@ -3,10 +3,12 @@ import {
   ClipboardList, CheckCircle, AlertTriangle, Users, BarChart2, 
   ChevronRight, ArrowLeft, Send, ThumbsUp, RefreshCw, Layers, Sliders, Forward,
   Terminal, User as UserIcon, Clock, Settings, ArrowUpRight, Activity, FileText, Phone,
-  TrendingUp, ExternalLink
+  TrendingUp, ExternalLink, Printer
 } from "lucide-react";
 import { User, ScanResult, Consultation } from "../types";
 import GradCamCanvas from "./GradCamCanvas";
+import GradCamComparisonSlider from "./GradCamComparisonSlider.tsx";
+import ClinicalReportModal from "./ClinicalReportModal.tsx";
 import DoctorProfileTab from "./DoctorProfileTab";
 import { supabase } from "../lib/supabaseClient";
 import { notifyUser } from "../lib/notify";
@@ -26,6 +28,7 @@ export default function DoctorDashboard({ user }: DoctorDashboardProps) {
   const [auditLogs, setAuditLogs] = useState<any[]>([]);
   const [activeTab, setActiveTab] = useState<"queue" | "history" | "analytics" | "consultations" | "referrals" | "logs" | "profile">("queue");
   const [selectedScan, setSelectedScan] = useState<ScanResult | null>(null);
+  const [showReportModal, setShowReportModal] = useState(false);
 
   // Search and Filter states
   const [queueSearch, setQueueSearch] = useState("");
@@ -633,66 +636,44 @@ export default function DoctorDashboard({ user }: DoctorDashboardProps) {
 
           <div className="bg-white rounded-2xl border border-slate-200/80 shadow-md p-6 sm:p-8 space-y-8">
             
-            <div className="border-b border-slate-100 pb-4">
-              <span className="text-[10px] font-mono text-slate-400 uppercase font-semibold">Case Reference ID: {selectedScan.id.slice(0, 8).toUpperCase()}</span>
-              <h3 className="text-xl font-bold text-slate-900">
-                Clinician Examination of {selectedScan.patientName}
-              </h3>
-              <p className="text-xs text-slate-400 mt-1">
-                Age: {selectedScan.patientAge || 24} • Gender: {selectedScan.patientGender || "Male"} • Submitted: {new Date(selectedScan.timestamp).toLocaleString()}
-              </p>
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-slate-100 pb-4">
+              <div>
+                <span className="text-[10px] font-mono text-slate-400 uppercase font-semibold">Case Reference ID: {selectedScan.id.slice(0, 8).toUpperCase()}</span>
+                <h3 className="text-xl font-bold text-slate-900">
+                  Clinician Examination of {selectedScan.patientName}
+                </h3>
+                <p className="text-xs text-slate-400 mt-1">
+                  Age: {selectedScan.patientAge || 24} • Gender: {selectedScan.patientGender || "Male"} • Submitted: {new Date(selectedScan.timestamp).toLocaleString()}
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setShowReportModal(true)}
+                className="px-4 py-2 bg-gradient-to-r from-teal-600 to-cyan-600 hover:from-teal-700 hover:to-cyan-700 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-sm"
+              >
+                <Printer className="h-4 w-4" />
+                <span>Generate Official Clinical Report (Print/PDF)</span>
+              </button>
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
               
               {/* Left Column: Image Overlay Visual Canvas */}
               <div className="lg:col-span-5 space-y-4">
-                <div className="text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
-                  Interactive Deep Learning Overlay
+                <div className="text-xs font-bold text-slate-700 uppercase tracking-wider mb-2 flex items-center justify-between">
+                  <span>Interactive Deep Learning Attention</span>
+                  <span className="text-[9px] font-mono text-teal-700 font-bold bg-teal-50 px-2 py-0.5 rounded border border-teal-200">
+                    SPLIT SLIDER & ALPHA
+                  </span>
                 </div>
                 
-                <GradCamCanvas 
+                <GradCamComparisonSlider 
                   imageUrl={selectedScan.imageUrl}
                   heatmapPoints={selectedScan.heatmapPoints}
                   heatmapImage={selectedScan.heatmapImage}
-                  showHeatmap={showGradCam}
-                  opacity={overlayOpacity}
                   className="w-full"
                 />
-
-                {/* Live Controls Slider */}
-                <div className="bg-slate-50 border border-slate-200 p-4 rounded-xl space-y-3.5">
-                  <div className="flex justify-between items-center">
-                    <div className="space-y-0.5">
-                      <label className="text-xs font-bold text-slate-700">Project Grad-CAM Hotspots</label>
-                      <p className="text-[10px] text-slate-400">Displays neural network self-attention layers</p>
-                    </div>
-                    <input 
-                      type="checkbox" 
-                      checked={showGradCam}
-                      onChange={(e) => setShowGradCam(e.target.checked)}
-                      className="rounded border-slate-300 text-teal-600 focus:ring-teal-500 h-4.5 w-4.5 cursor-pointer"
-                    />
-                  </div>
-
-                  {showGradCam && (
-                    <div className="space-y-1">
-                      <div className="flex justify-between text-[10px] font-mono text-slate-500">
-                        <span>HEAT TRANSPARENCY</span>
-                        <span>{Math.round(overlayOpacity * 100)}%</span>
-                      </div>
-                      <input 
-                        type="range" 
-                        min="0.1" 
-                        max="1.0" 
-                        step="0.05"
-                        value={overlayOpacity}
-                        onChange={(e) => setOverlayOpacity(parseFloat(e.target.value))}
-                        className="w-full accent-teal-600 h-1.5 rounded-lg cursor-pointer bg-slate-200"
-                      />
-                    </div>
-                  )}
-                </div>
               </div>
 
               {/* Right Column: AI Analysis & Verdict Review Form */}
@@ -1492,6 +1473,15 @@ export default function DoctorDashboard({ user }: DoctorDashboardProps) {
           ------------------------------------------------------------- */}
       {activeTab === "profile" && !selectedScan && (
         <DoctorProfileTab user={user} />
+      )}
+
+      {/* FEATURE 4: 1-CLICK PRINTABLE CLINICAL TRIAGE & XAI REPORT MODAL */}
+      {showReportModal && selectedScan && (
+        <ClinicalReportModal
+          scan={selectedScan}
+          patientName={selectedScan.patientName}
+          onClose={() => setShowReportModal(false)}
+        />
       )}
 
       </div>
