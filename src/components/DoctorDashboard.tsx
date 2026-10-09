@@ -64,7 +64,10 @@ export default function DoctorDashboard({ user }: DoctorDashboardProps) {
     explanation: row.explanation,
     clinicalDetails: row.clinical_details,
     heatmapPoints: row.heatmap_points || [],
-    timestamp: row.created_at,
+    heatmapImage: row.heatmap_image || row.heatmapImage || null,
+    probabilities: row.probabilities || undefined,
+    modelName: row.model_name || row.modelName || undefined,
+    timestamp: row.created_at || row.timestamp,
     status: row.status,
     doctorVerdict: row.doctor_verdict || undefined,
     bodyLocation: row.body_location,
@@ -651,6 +654,7 @@ export default function DoctorDashboard({ user }: DoctorDashboardProps) {
                 <GradCamCanvas 
                   imageUrl={selectedScan.imageUrl}
                   heatmapPoints={selectedScan.heatmapPoints}
+                  heatmapImage={selectedScan.heatmapImage}
                   showHeatmap={showGradCam}
                   opacity={overlayOpacity}
                   className="w-full"

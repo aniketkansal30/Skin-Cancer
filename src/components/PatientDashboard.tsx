@@ -86,6 +86,8 @@ export default function PatientDashboard({ user }: PatientDashboardProps) {
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [patientAge, setPatientAge] = useState("24");
   const [patientGender, setPatientGender] = useState("Male");
+  // Inference engine selection: 'real' = Trained Swin Transformer V2 (Python ML Model), 'demo' = Simulation Demo Mode
+  const [inferenceMode, setInferenceMode] = useState<"real" | "demo">("real");
 
   // Lesion Tracking & Body Location states
   const [patientLesions, setPatientLesions] = useState<any[]>([]);
@@ -147,7 +149,11 @@ export default function PatientDashboard({ user }: PatientDashboardProps) {
     explanation: row.explanation,
     clinicalDetails: row.clinical_details,
     heatmapPoints: row.heatmap_points || [],
-    timestamp: row.created_at,
+    heatmapImage: row.heatmap_image || row.heatmapImage || null,
+    probabilities: row.probabilities || undefined,
+    modelName: row.model_name || row.modelName || undefined,
+    durationMs: row.duration_ms || row.durationMs || undefined,
+    timestamp: row.created_at || row.timestamp,
     status: row.status,
     doctorVerdict: row.doctor_verdict || undefined,
     bodyLocation: row.body_location,
@@ -302,17 +308,88 @@ export default function PatientDashboard({ user }: PatientDashboardProps) {
         currentStage++;
         setTimeout(runStages, stageIntervals[currentStage]);
       } else {
-        // Final stage reached — run mock inference and save to Supabase
+        // Final stage reached — run real model inference or demo mode and save to Supabase
         try {
-          const result = runMockInference();
+          let predictionResult: {
+            predictedClass: string;
+            acronym: string;
+            confidence: number;
+            riskLevel: "Low" | "Medium" | "High";
+            explanation: string;
+            clinicalDetails: string;
+            heatmapPoints?: HeatmapPoint[];
+            heatmapImage?: string | null;
+            modelName?: string;
+            durationMs?: number;
+            uncertaintyScore?: number;
+            needsMandatoryReview?: boolean;
+            contributingFactors?: { label: string; weight: number }[];
+          };
 
-          // Generate realistic uncertainty score & contributing factors
-          const conf = result.confidence;
-          const isHighRisk = result.riskLevel === "High";
-          const uncertaintyVal = Number((isHighRisk && conf < 90 ? 0.45 + Math.random() * 0.35 : 0.05 + Math.random() * 0.25).toFixed(3));
-          const needsReviewVal = uncertaintyVal > 0.45 || (isHighRisk && conf < 88);
+          if (inferenceMode === "real") {
+            // Real inference: send the actual uploaded image to the backend endpoint
+            const res = await fetch("/api/predict", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                imageBase64: selectedImage,
+                patientId: user.id,
+                patientName: user.name,
+                patientAge,
+                patientGender,
+              }),
+            });
 
-          const factorMap: Record<string, { label: string, weight: number }[]> = {
+            if (!res.ok) {
+              const errBody = await res.json().catch(() => ({}));
+              throw new Error(
+                errBody.error ||
+                `The Python model server returned an error (HTTP ${res.status}). Ensure model_server/model_server.py is running.`
+              );
+            }
+
+            const modelData = await res.json();
+            if (!modelData || typeof modelData.predictedClass !== "string" || !Number.isFinite(modelData.confidence)) {
+              throw new Error("Invalid prediction format received from the Python model server.");
+            }
+
+            predictionResult = {
+              predictedClass: modelData.predictedClass,
+              acronym: modelData.acronym,
+              confidence: Number(modelData.confidence),
+              riskLevel: modelData.riskLevel as "Low" | "Medium" | "High",
+              explanation: modelData.explanation,
+              clinicalDetails: modelData.clinicalDetails,
+              heatmapPoints: modelData.heatmapPoints || [],
+              heatmapImage: modelData.heatmapImage || null,
+              modelName: modelData.modelName || "DermShield-SwinV2-B-384",
+              durationMs: modelData.durationMs || 1200,
+              uncertaintyScore: modelData.uncertaintyScore,
+              needsMandatoryReview: modelData.needsMandatoryReview,
+              contributingFactors: modelData.contributingFactors,
+            };
+          } else {
+            // Simulation Demo Mode
+            const mock = runMockInference();
+            predictionResult = {
+              ...mock,
+              heatmapImage: null,
+              modelName: "DermShield Mock CNN+ViT v1.4 (Demo Mode)",
+              durationMs: stageIntervals.reduce((a, b) => a + b, 0),
+            };
+          }
+
+          // Generate realistic uncertainty score & contributing factors if not provided
+          const conf = predictionResult.confidence;
+          const isHighRisk = predictionResult.riskLevel === "High";
+          const uncertaintyVal = predictionResult.uncertaintyScore !== undefined
+            ? predictionResult.uncertaintyScore
+            : Number((isHighRisk && conf < 90 ? 0.45 + Math.random() * 0.35 : 0.05 + Math.random() * 0.25).toFixed(3));
+          const needsReviewVal = predictionResult.needsMandatoryReview !== undefined
+            ? predictionResult.needsMandatoryReview
+            : (uncertaintyVal > 0.45 || (isHighRisk && conf < 88));
+
+          const factorMap: Record<string, { label: string; weight: number }[]> = {
             "MEL": [
               { label: "Border Irregularity", weight: 38 },
               { label: "Asymmetry", weight: 31 },
@@ -325,6 +402,18 @@ export default function PatientDashboard({ user }: PatientDashboardProps) {
               { label: "Asymmetry", weight: 17 },
               { label: "Color Uniformity", weight: 12 }
             ],
+            "SCC": [
+              { label: "Keratotic Scale / Crusting", weight: 42 },
+              { label: "Indurated Border", weight: 29 },
+              { label: "Erythematous Base", weight: 18 },
+              { label: "Rapid Growth Pattern", weight: 11 }
+            ],
+            "AK": [
+              { label: "Surface Roughness & Scale", weight: 44 },
+              { label: "Erythematous Margin", weight: 28 },
+              { label: "Photodamage Context", weight: 18 },
+              { label: "Diameter <10mm", weight: 10 }
+            ],
             "BKL": [
               { label: "Stuck-on Appearance", weight: 48 },
               { label: "Comedo-like Openings", weight: 25 },
@@ -336,9 +425,21 @@ export default function PatientDashboard({ user }: PatientDashboardProps) {
               { label: "Symmetrical Borders", weight: 28 },
               { label: "Uniform Color", weight: 14 },
               { label: "Diameter <6mm", weight: 6 }
+            ],
+            "DF": [
+              { label: "Central Pale Area", weight: 46 },
+              { label: "Delicate Pigment Network", weight: 28 },
+              { label: "Firm Papular Contour", weight: 16 },
+              { label: "Symmetrical Rim", weight: 10 }
+            ],
+            "VASC": [
+              { label: "Vascular Lacunae Pools", weight: 54 },
+              { label: "Red-Purple Homogeneity", weight: 24 },
+              { label: "Sharp Demarcation", weight: 14 },
+              { label: "Non-Pigmented Rim", weight: 8 }
             ]
           };
-          const factors = factorMap[result.acronym] || factorMap["NV"];
+          const factors = predictionResult.contributingFactors || factorMap[predictionResult.acronym] || factorMap["NV"];
 
           // Link to or create lesion
           let finalLesionId = lesionId;
@@ -364,13 +465,14 @@ export default function PatientDashboard({ user }: PatientDashboardProps) {
               patient_age: parseInt(patientAge) || 24,
               patient_gender: patientGender,
               image_url: selectedImage,
-              predicted_class: result.predictedClass,
-              acronym: result.acronym,
-              confidence: result.confidence,
-              risk_level: result.riskLevel,
-              explanation: result.explanation,
-              clinical_details: result.clinicalDetails,
-              heatmap_points: result.heatmapPoints,
+              predicted_class: predictionResult.predictedClass,
+              acronym: predictionResult.acronym,
+              confidence: predictionResult.confidence,
+              risk_level: predictionResult.riskLevel,
+              explanation: predictionResult.explanation,
+              clinical_details: predictionResult.clinicalDetails,
+              heatmap_points: predictionResult.heatmapPoints || [],
+              heatmap_image: predictionResult.heatmapImage || null,
               status: "pending_review",
               body_location: bodyLocation,
               lesion_id: finalLesionId,
@@ -385,10 +487,10 @@ export default function PatientDashboard({ user }: PatientDashboardProps) {
 
           // Log this inference for the admin telemetry dashboard
           await supabase.from("inference_logs").insert({
-            model_name: "DermShield Mock CNN+ViT v1.4",
+            model_name: predictionResult.modelName || (inferenceMode === "real" ? "DermShield-SwinV2-B-384" : "DermShield Mock CNN+ViT v1.4"),
             patient_id: user.id,
             image_size_kb: Math.round((selectedImage.length * 0.75) / 1024),
-            duration_ms: stageIntervals.reduce((a, b) => a + b, 0),
+            duration_ms: predictionResult.durationMs || stageIntervals.reduce((a, b) => a + b, 0),
             status: "success"
           });
 
@@ -401,11 +503,11 @@ export default function PatientDashboard({ user }: PatientDashboardProps) {
           setActiveTab("dashboard");
           loadPatientData();
         } catch (err: any) {
-          console.error("Scan insert failed", err);
+          console.error("Scan analysis failed", err);
           setAnalysisError(err.message || "The server failed to process the cutaneous scanning pattern.");
 
           await supabase.from("inference_logs").insert({
-            model_name: "DermShield Mock CNN+ViT v1.4",
+            model_name: inferenceMode === "real" ? "DermShield-SwinV2-B-384" : "DermShield Mock CNN+ViT v1.4",
             patient_id: user.id,
             image_size_kb: selectedImage ? Math.round((selectedImage.length * 0.75) / 1024) : 0,
             duration_ms: 0,
@@ -821,6 +923,7 @@ export default function PatientDashboard({ user }: PatientDashboardProps) {
                         <GradCamCanvas
                           imageUrl={scans[0].imageUrl}
                           heatmapPoints={scans[0].heatmapPoints}
+                          heatmapImage={scans[0].heatmapImage}
                           showHeatmap={showGradCam}
                           opacity={overlayOpacity}
                           className="w-full"
@@ -1343,6 +1446,48 @@ export default function PatientDashboard({ user }: PatientDashboardProps) {
                       </div>
                     </div>
 
+                    {/* Inference Engine Selection */}
+                    <div className="p-3 bg-slate-50 border border-slate-200/80 rounded-xl space-y-2">
+                      <div className="flex justify-between items-center">
+                        <label className="text-[10px] font-bold text-slate-500 uppercase">Inference Engine</label>
+                        <span className="text-[9px] font-mono font-semibold px-1.5 py-0.5 rounded bg-cyan-100 text-cyan-800">
+                          {inferenceMode === "real" ? "Trained SwinV2-B-384" : "Simulation Demo Mode"}
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2 text-xs">
+                        <button
+                          type="button"
+                          onClick={() => { setInferenceMode("real"); setAnalysisError(""); }}
+                          className={`px-2.5 py-2 rounded-lg border text-left cursor-pointer transition-all ${
+                            inferenceMode === "real"
+                              ? "bg-white border-cyan-500 text-cyan-900 shadow-xs font-bold ring-1 ring-cyan-500/20"
+                              : "bg-transparent border-slate-200 text-slate-500 hover:bg-white"
+                          }`}
+                        >
+                          <div className="flex items-center gap-1.5 font-semibold">
+                            <span className={`h-2 w-2 rounded-full ${inferenceMode === "real" ? "bg-emerald-500 animate-pulse" : "bg-slate-300"}`} />
+                            <span>Trained Model</span>
+                          </div>
+                          <p className="text-[9px] text-slate-400 mt-0.5 font-mono">Python Swin Transformer</p>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => { setInferenceMode("demo"); setAnalysisError(""); }}
+                          className={`px-2.5 py-2 rounded-lg border text-left cursor-pointer transition-all ${
+                            inferenceMode === "demo"
+                              ? "bg-white border-cyan-500 text-cyan-900 shadow-xs font-bold ring-1 ring-cyan-500/20"
+                              : "bg-transparent border-slate-200 text-slate-500 hover:bg-white"
+                          }`}
+                        >
+                          <div className="flex items-center gap-1.5 font-semibold">
+                            <span className={`h-2 w-2 rounded-full ${inferenceMode === "demo" ? "bg-amber-500" : "bg-slate-300"}`} />
+                            <span>Demo Simulation</span>
+                          </div>
+                          <p className="text-[9px] text-slate-400 mt-0.5 font-mono">Synthetic Preview Flow</p>
+                        </button>
+                      </div>
+                    </div>
+
                     {analysisError && (
                       <div className="p-3 bg-rose-50 border border-rose-200 rounded-lg text-rose-800 text-xs flex items-start gap-2">
                         <AlertTriangle className="h-4 w-4 shrink-0 text-rose-500 mt-0.5" />
@@ -1357,7 +1502,7 @@ export default function PatientDashboard({ user }: PatientDashboardProps) {
                       className="w-full py-3 px-4 bg-gradient-to-r from-cyan-600 to-teal-500 hover:from-cyan-700 hover:to-teal-600 disabled:from-slate-200 disabled:to-slate-300 disabled:text-slate-400 text-white font-bold rounded-xl text-sm shadow-md cursor-pointer transition-all flex items-center justify-center gap-1.5"
                     >
                       <Sparkles className="h-4 w-4 text-cyan-200" />
-                      <span>Execute CNN + ViT AI Screening</span>
+                      <span>{inferenceMode === "real" ? "Execute SwinV2 AI Screening (Python Model)" : "Execute Demo Simulation Screening"}</span>
                     </button>
                   </div>
 
@@ -1404,6 +1549,7 @@ export default function PatientDashboard({ user }: PatientDashboardProps) {
                     <GradCamCanvas
                       imageUrl={selectedScan.imageUrl}
                       heatmapPoints={selectedScan.heatmapPoints}
+                      heatmapImage={selectedScan.heatmapImage}
                       showHeatmap={showGradCam}
                       opacity={overlayOpacity}
                       className="w-full"

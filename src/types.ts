@@ -46,6 +46,10 @@ export interface ScanResult {
   explanation: string;
   clinicalDetails: string;
   heatmapPoints: HeatmapPoint[];
+  heatmapImage?: string | null;
+  probabilities?: Record<string, number>;
+  modelName?: string;
+  durationMs?: number;
   timestamp: string;
   status: 'none' | 'pending_review' | 'reviewed';
   doctorVerdict?: {

@@ -3,18 +3,20 @@ import { HeatmapPoint } from "../types";
 
 interface GradCamCanvasProps {
   imageUrl: string;
-  heatmapPoints: HeatmapPoint[];
+  heatmapPoints?: HeatmapPoint[];
   showHeatmap: boolean;
   opacity?: number; // 0 to 1
   className?: string;
+  heatmapImage?: string | null;
 }
 
 export default function GradCamCanvas({
   imageUrl,
-  heatmapPoints,
+  heatmapPoints = [],
   showHeatmap,
   opacity = 0.65,
   className = "",
+  heatmapImage,
 }: GradCamCanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -125,7 +127,16 @@ export default function GradCamCanvas({
         style={{ pointerEvents: "none" }}
       />
 
-      {imageLoaded && (
+      {showHeatmap && imageLoaded && heatmapImage && (
+        <img
+          src={heatmapImage}
+          alt="Grad-CAM Activation Overlay"
+          className="absolute top-0 left-0 w-full h-full object-cover pointer-events-none transition-opacity duration-300"
+          style={{ opacity }}
+        />
+      )}
+
+      {imageLoaded && (!heatmapImage || heatmapPoints.length > 0) && (
         <canvas
           ref={canvasRef}
           className="absolute top-0 left-0 pointer-events-none transition-opacity duration-300"
