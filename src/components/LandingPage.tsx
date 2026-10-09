@@ -344,47 +344,6 @@ export default function LandingPage() {
                   </div>
                 )}
 
-                {!isRegistering && (
-                  <div className="mb-4 p-3 bg-slate-50 border border-slate-200/80 rounded-xl space-y-2">
-                    <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider flex items-center justify-between">
-                      <span>Quick Demo Workspaces</span>
-                      <span className="text-[9px] text-cyan-700 font-medium">Click to populate</span>
-                    </div>
-                    <div className="grid grid-cols-3 gap-1.5">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setEmail("patient@dermshield.com");
-                          setPassword("patient123");
-                        }}
-                        className="py-1.5 px-2 text-[11px] font-semibold bg-white hover:bg-cyan-50 hover:text-cyan-800 border border-slate-200 rounded-lg text-slate-700 transition-colors text-center cursor-pointer shadow-2xs"
-                      >
-                        Patient
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setEmail("doctor@dermshield.com");
-                          setPassword("doctor123");
-                        }}
-                        className="py-1.5 px-2 text-[11px] font-semibold bg-white hover:bg-cyan-50 hover:text-cyan-800 border border-slate-200 rounded-lg text-slate-700 transition-colors text-center cursor-pointer shadow-2xs"
-                      >
-                        Doctor
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setEmail("admin@dermshield.com");
-                          setPassword("admin123");
-                        }}
-                        className="py-1.5 px-2 text-[11px] font-semibold bg-white hover:bg-cyan-50 hover:text-cyan-800 border border-slate-200 rounded-lg text-slate-700 transition-colors text-center cursor-pointer shadow-2xs"
-                      >
-                        Admin
-                      </button>
-                    </div>
-                  </div>
-                )}
-
                 {/* Main Auth Form */}
                 <form onSubmit={isRegistering ? handleRegister : handleLogin} className="space-y-4">
                   

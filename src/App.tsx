@@ -30,31 +30,23 @@ function AppContent() {
   return (
     <div className="bg-slate-50 min-h-screen text-slate-800 flex flex-col font-sans" id="dermshield-app-root">
       
-      {/* Top Clinical Disclaimer Banner */}
-      <div className="bg-amber-600 text-amber-50 px-4 py-1.5 text-center text-[10px] sm:text-xs font-semibold select-none flex items-center justify-center gap-1.5 shadow-sm relative z-50">
-        <AlertTriangle className="h-4 w-4 shrink-0 text-amber-200" />
-        <span>
-          <strong>Decision Screening Support Aid:</strong> For clinical evaluation and training only. Do not present as legal medical diagnosis.
-        </span>
-      </div>
-
-      {/* Main Navigation Bar */}
-      <header className="bg-white border-b border-slate-100 py-3 px-4 sm:px-6 lg:px-8 shadow-sm relative z-40" id="main-header">
-        <div className="max-w-7xl mx-auto flex justify-between items-center">
-          
-          {/* Logo Brand Title */}
-          <div className="flex items-center gap-2.5 select-none">
-            <div className="h-8 w-8 bg-gradient-to-r from-cyan-600 to-teal-500 rounded-lg flex items-center justify-center text-white font-bold shadow-md">
-              <Shield className="h-4.5 w-4.5" />
+      {/* Main Navigation Bar — Rendered when user is logged in to manage workspace session */}
+      {currentUser && (
+        <header className="bg-white border-b border-slate-200/80 py-3 px-4 sm:px-6 lg:px-8 shadow-xs relative z-40" id="main-header">
+          <div className="max-w-7xl mx-auto flex justify-between items-center">
+            
+            {/* Logo Brand Title */}
+            <div className="flex items-center gap-2.5 select-none">
+              <div className="h-8 w-8 bg-gradient-to-r from-cyan-600 to-teal-500 rounded-lg flex items-center justify-center text-white font-bold shadow-md shadow-cyan-600/20">
+                <Shield className="h-4.5 w-4.5" />
+              </div>
+              <div>
+                <h1 className="text-sm font-black text-slate-900 tracking-tight leading-none uppercase">DermShield AI</h1>
+                <span className="text-[9px] font-bold text-cyan-600 font-mono tracking-wider">Clinical Screening Workspace</span>
+              </div>
             </div>
-            <div>
-              <h1 className="text-sm font-black text-slate-900 tracking-tight leading-none uppercase">DermShield AI</h1>
-              <span className="text-[9px] font-bold text-cyan-600 font-mono tracking-wider">CNN+ViT Screening Pipeline</span>
-            </div>
-          </div>
 
-          {/* Logged in user info + logout */}
-          {currentUser ? (
+            {/* Logged in user info + logout */}
             <div className="flex items-center gap-3">
               {currentUser.role === "patient" && <NotificationBell />}
               <div className="text-right">
@@ -73,14 +65,10 @@ function AppContent() {
                 <LogOut className="h-4 w-4" />
               </button>
             </div>
-          ) : (
-            <div className="text-[10px] font-mono text-slate-400 uppercase font-semibold">
-              Explainable AI Dermatopathology
-            </div>
-          )}
 
-        </div>
-      </header>
+          </div>
+        </header>
+      )}
 
       {/* Main Body View Layouts based on auth status and roles */}
       <main className="flex-1" id="main-content-layout">
