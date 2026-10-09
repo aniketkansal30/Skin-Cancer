@@ -24,7 +24,16 @@ const app = express();
 
 const PORT = 3000;
 
-
+// Enable CORS for frontend deployment (Vercel, localhost, or any web client)
+app.use((req, res, next) => {
+  res.header("Access-Control-Allow-Origin", "*");
+  res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
+  res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept, Authorization, ngrok-skip-browser-warning");
+  if (req.method === "OPTIONS") {
+    return res.sendStatus(204);
+  }
+  next();
+});
 
 // Enable JSON payload parsing up to 10MB (for base64 image uploads)
 
@@ -1360,13 +1369,16 @@ app.post("/api/predict", upload.single("file") as any, async (req, res) => {
       });
     }
 
-    const modelApiUrl = process.env.MODEL_API_URL?.replace(/\/+$/, "") || "http://127.0.0.1:8000";
+    const modelApiUrl = process.env.MODEL_API_URL?.replace(/\/+$/, "") || "http://127.0.0.1:8001";
 
     const form = new FormData();
     form.append("file", new Blob([new Uint8Array(imageBuffer)], { type: mimeType }), originalName);
 
     const modelResponse = await fetch(`${modelApiUrl}/predict?heatmap=true`, {
       method: "POST",
+      headers: {
+        "ngrok-skip-browser-warning": "1",
+      },
       body: form,
       signal: AbortSignal.timeout(120_000),
     });
@@ -1541,7 +1553,7 @@ app.post("/api/predict", upload.single("file") as any, async (req, res) => {
     return res.json(newScan);
   } catch (error: any) {
     console.error("Skin model integration failed:", error);
-    const targetUrl = process.env.MODEL_API_URL?.replace(/\/+$/, "") || "http://127.0.0.1:8000";
+    const targetUrl = process.env.MODEL_API_URL?.replace(/\/+$/, "") || "http://127.0.0.1:8001";
     return res.status(502).json({
       error: error?.name === "TimeoutError"
         ? "The skin model timed out. Please try again."

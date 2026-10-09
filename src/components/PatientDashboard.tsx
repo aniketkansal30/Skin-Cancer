@@ -12,6 +12,7 @@ import ExplainabilitySummary from "./ExplainabilitySummary";
 import PatientProfileTab from "./PatientProfileTab";
 import { jsPDF } from "jspdf";
 import { supabase } from "../lib/supabaseClient";
+import { apiUrl } from "../lib/api";
 import {
   ResponsiveContainer, LineChart, Line, CartesianGrid, XAxis, YAxis, Tooltip as ChartTooltip, Legend as ChartLegend
 } from "recharts";
@@ -328,7 +329,7 @@ export default function PatientDashboard({ user }: PatientDashboardProps) {
 
           if (inferenceMode === "real") {
             // Real inference: send the actual uploaded image to the backend endpoint
-            const res = await fetch("/api/predict", {
+            const res = await fetch(apiUrl("/api/predict"), {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({

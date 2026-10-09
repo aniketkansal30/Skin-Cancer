@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import { MessageSquare, X, Send, Sparkles, AlertCircle, Bot, User, HelpCircle, Loader2 } from "lucide-react";
 import { useAuth } from "../AuthContext";
+import { apiUrl } from "../lib/api";
 
 interface Message {
   id: string;
@@ -187,7 +188,7 @@ How can I assist you with your skin health education today?`,
 
     try {
       // Build conversation payload to send to backend with chat history
-      const response = await fetch("/api/chat", {
+      const response = await fetch(apiUrl("/api/chat"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
