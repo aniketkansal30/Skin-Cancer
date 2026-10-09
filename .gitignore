@@ -6,3 +6,6 @@ model_server/venv/
 __pycache__/
 *.pth
 *.ptall-code.txt
+
+.vscode/
+all-code.txt
