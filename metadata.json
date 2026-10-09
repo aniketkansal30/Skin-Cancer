@@ -1,6 +1,6 @@
 {
   "name": "DermShield AI",
-  "description": "An advanced clinical decision support and screening platform powered by CNN and Vision Transformer models for early skin cancer detection with Grad-CAM explainability, case workflows, and reports.",
+  "description": "An advanced clinical decision support and screening platform powered by a Swin Transformer V2 Base model (384×384) trained on ISIC 2019 with leakage-free splits, class-aware training and Grad-CAM explainability, with case workflows and reports.",
   "requestFramePermissions": [
     "camera"
   ],

@@ -112,7 +112,7 @@ export default function DoctorDashboard({ user }: DoctorDashboardProps) {
 
       // Audit logs: scans reviewed by this doctor
       const reviewedScans = mappedScans.filter(
-        (s) => s.status === "reviewed" && s.doctorVerdict?.doctorId === user.id
+        (s: ScanResult) => s.status === "reviewed" && s.doctorVerdict?.doctorId === user.id
       );
       setAuditLogs(reviewedScans);
 

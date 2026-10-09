@@ -54,8 +54,8 @@
       "acronym": "MEL",
       "confidence": 89.4,
       "riskLevel": "High",
-      "explanation": "The Swish-activated CNN+ViT ensemble detected pronounced structural asymmetry (A score: 1.8), marked border irregularity (B score: 2.1), and multi-colored variegation (C score: 3.2). Additionally, high-intensity local activation of the Vision Transformer self-attention maps points heavily to an atypical pigment network near the upper margin.",
-      "clinicalDetails": "Atypical melanocytic lesion showing dynamic asymmetry and jagged borders. Grad-CAM shows localized hyper-activation (hotspot weight: 0.95) corresponding to standard Fitzpatrick type II presentation of evolving superficial spreading melanoma. Recommend immediate excisional biopsy with 5mm margins.",
+      "explanation": "The Swin Transformer V2-B model predicted Melanoma and the Grad-CAM map highlights pronounced structural asymmetry (A score: 1.8), marked border irregularity (B score: 2.1), and multi-colored variegation (C score: 3.2). Additionally, high-intensity local activation of the Vision Transformer self-attention maps points heavily to an atypical pigment network near the upper margin.",
+      "clinicalDetails": "Atypical melanocytic lesion showing dynamic asymmetry and jagged borders. Grad-CAM shows localized activation over the lesion region. Recommend immediate excisional biopsy with 5mm margins.",
       "heatmapPoints": [
         {
           "x": 48,
@@ -90,7 +90,7 @@
       "acronym": "NV",
       "confidence": 97.2,
       "riskLevel": "Low",
-      "explanation": "The neural network shows high confidence (97.2%) for a completely benign melanocytic nevus. On-screen features demonstrate excellent radial symmetry, sharp well-defined borders, and uniform brown pigment network distribution.",
+      "explanation": "The Swin Transformer V2-B model shows high confidence (97.2%) for a completely benign melanocytic nevus. On-screen features demonstrate excellent radial symmetry, sharp well-defined borders, and uniform brown pigment network distribution.",
       "clinicalDetails": "Symmetrical dermoscopic structure. No atypical pigment networks, regression structures, or blue-white veils identified. Regular benign nevus pattern. Grad-CAM activations are uniformly spread with low concentration peak.",
       "heatmapPoints": [
         {
@@ -121,8 +121,8 @@
       "acronym": "BCC",
       "confidence": 78.1,
       "riskLevel": "High",
-      "explanation": "The model detected a high likelihood of Basal Cell Carcinoma, characterized by local telangiectasias (fine blood vessel lines) and a pearly translucent border structure detected via ViT patch embeddings.",
-      "clinicalDetails": "Nodular basal cell carcinoma candidate. Prominent shiny nodule. Grad-CAM self-attention maps show strong localized focus around translucent micro-structures. Biopsy is highly recommended.",
+      "explanation": "The model detected a high likelihood of Basal Cell Carcinoma, characterized by local telangiectasias (fine blood vessel lines) and a pearly translucent border structure highlighted by the Grad-CAM map.",
+      "clinicalDetails": "Nodular basal cell carcinoma candidate. Prominent shiny nodule. Grad-CAM maps show strong localized focus around translucent micro-structures. Biopsy is highly recommended.",
       "heatmapPoints": [
         {
           "x": 52,
@@ -165,7 +165,7 @@
     {
       "id": "log-1",
       "timestamp": "2026-07-01T15:20:00.000Z",
-      "modelName": "DermShield-CNN-ViT-v1.4",
+      "modelName": "DermShield-SwinV2-B-384",
       "patientId": "u-patient-1",
       "imageSizeKb": 342,
       "durationMs": 1420,
@@ -174,7 +174,7 @@
     {
       "id": "log-2",
       "timestamp": "2026-06-15T11:10:00.000Z",
-      "modelName": "DermShield-CNN-ViT-v1.4",
+      "modelName": "DermShield-SwinV2-B-384",
       "patientId": "u-patient-1",
       "imageSizeKb": 184,
       "durationMs": 1150,
@@ -183,7 +183,7 @@
     {
       "id": "log-3",
       "timestamp": "2026-06-29T16:45:00.000Z",
-      "modelName": "DermShield-CNN-ViT-v1.4",
+      "modelName": "DermShield-SwinV2-B-384",
       "patientId": "u-patient-another",
       "imageSizeKb": 295,
       "durationMs": 1530,

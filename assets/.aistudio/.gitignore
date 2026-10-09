@@ -5,4 +5,4 @@ dist/
 model_server/venv/
 __pycache__/
 *.pth
-*.ptall-code.txt
+*.pt
