@@ -16,7 +16,7 @@ NUM_CLASSES = 8
 IMG_SIZE = 384
 CKPT_PATH = os.getenv(
     "CHECKPOINT_PATH",
-    os.path.join(os.path.dirname(__file__), "swinv2_experiment_b_best.pth"),
+            os.path.join(os.path.dirname(__file__), "swinv2_weights_only.pth"),
 )
 CLASS_NAMES = ["MEL", "NV", "BCC", "AK", "BKL", "DF", "VASC", "SCC"]
 CLASS_FULL = {

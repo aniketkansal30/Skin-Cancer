@@ -1,15 +1,9 @@
 import torch, timm
 
-CKPT = "swinv2_experiment_b_best.pth"
+CKPT = "swinv2_weights_only.pth"
 MODEL_NAME = "swinv2_base_window12to24_192to384.ms_in22k_ft_in1k"
 
-ckpt = torch.load(CKPT, map_location="cpu", weights_only=False)
-print("Keys:", list(ckpt.keys()))
-print("Epoch:", ckpt.get("epoch"))
-print("Val metrics:", ckpt.get("val_metrics"))
-print("Config:", ckpt.get("config"))
-
-sd = ckpt["model_state_dict"]
+sd = torch.load(CKPT, map_location="cpu", weights_only=False)
 print("Has module. prefix:", any(k.startswith("module.") for k in sd))
 sd = {k.replace("module.", "", 1): v for k, v in sd.items()}
 
