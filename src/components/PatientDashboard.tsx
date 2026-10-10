@@ -1899,7 +1899,7 @@ export default function PatientDashboard({ user }: PatientDashboardProps) {
                         {selectedScan.riskLevel} Risk Flag
                       </span>
                       <span className="text-xs font-mono font-bold bg-slate-100 border border-slate-200 text-slate-700 px-3 py-1 rounded-full">
-                        Model: Swish-ViT Ensemble
+                        Model: {selectedScan.modelName || "Swin Transformer V2 Base-384"}
                       </span>
                       <span className="text-xs font-mono font-bold bg-cyan-50 border border-cyan-100 text-cyan-800 px-3 py-1 rounded-full">
                         {selectedScan.confidence.toFixed(2)}% Conf.
