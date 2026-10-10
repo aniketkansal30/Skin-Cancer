@@ -224,7 +224,7 @@ export default function PatientDashboard({ user }: PatientDashboardProps) {
     model?: string;
     error?: string;
   }>({ checking: false, connected: false });
-  const [showModelConfig, setShowModelConfig] = useState(false);
+  const [showModelConfig, setShowModelConfig] = useState(true);
 
   // Lesion Tracking & Body Location states
   const [patientLesions, setPatientLesions] = useState<any[]>([]);
@@ -1426,6 +1426,106 @@ export default function PatientDashboard({ user }: PatientDashboardProps) {
                 <p className="text-slate-500 text-xs mt-1">
                   Upload an authentic dermoscopic capture or select one of the ISIC verified benchmark test specimens below for instant evaluation.
                 </p>
+              </div>
+
+              {/* PROMINENT AI MODEL ENGINE & SERVER CONFIG BANNER */}
+              <div className="p-4 bg-gradient-to-r from-slate-900 to-slate-800 text-white rounded-xl shadow-sm border border-slate-700/80 space-y-3" id="model-server-config-banner">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <div className="h-9 w-9 rounded-lg bg-cyan-500/20 border border-cyan-400/30 flex items-center justify-center text-cyan-400 shrink-0">
+                      <Server className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-bold text-sm text-white">Swin Transformer V2 Base-384</span>
+                        <span className="text-[10px] font-mono px-1.5 py-0.5 bg-cyan-500/20 text-cyan-300 border border-cyan-400/30 rounded font-semibold">ISIC 2019</span>
+                      </div>
+                      <p className="text-[11px] text-slate-300 mt-0.5">
+                        Clinical AI Engine • 8-Class Diagnostic Support • Grad-CAM Visual Heatmaps
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {modelServerStatus.checking ? (
+                      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-medium bg-amber-500/20 text-amber-300 border border-amber-400/30">
+                        <RefreshCw className="h-3 w-3 animate-spin" />
+                        <span>Testing Server...</span>
+                      </span>
+                    ) : modelServerStatus.connected ? (
+                      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-medium bg-emerald-500/20 text-emerald-300 border border-emerald-400/30">
+                        <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
+                        <span>PyTorch Live ({modelServerStatus.latencyMs}ms • {modelServerStatus.device?.toUpperCase() || 'GPU/CPU'})</span>
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-medium bg-cyan-500/20 text-cyan-300 border border-cyan-400/30">
+                        <span className="h-2 w-2 rounded-full bg-cyan-400" />
+                        <span>Calibrated Vision Pipeline (Online)</span>
+                      </span>
+                    )}
+
+                    <button
+                      type="button"
+                      onClick={() => setShowModelConfig(!showModelConfig)}
+                      className="px-3.5 py-1.5 bg-cyan-600 hover:bg-cyan-500 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-all shadow-sm"
+                    >
+                      <Settings className="h-3.5 w-3.5" />
+                      <span>{showModelConfig ? "Hide Config" : "Server Config"}</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* EXPANDABLE MODEL CONFIG PANEL */}
+                {showModelConfig && (
+                  <div className="pt-3 border-t border-slate-700/80 space-y-3">
+                    <div className="flex items-center justify-between text-xs flex-wrap gap-1">
+                      <span className="font-semibold text-slate-200">Python Model Server URL (FastAPI / Uvicorn)</span>
+                      <span className="text-[10px] text-slate-400 font-mono">Default: http://127.0.0.1:8001</span>
+                    </div>
+
+                    <div className="flex flex-col sm:flex-row gap-2">
+                      <input
+                        type="text"
+                        value={modelServerUrl}
+                        onChange={(e) => {
+                          setModelServerUrl(e.target.value);
+                          localStorage.setItem("dermshield_model_url", e.target.value);
+                        }}
+                        placeholder="http://127.0.0.1:8001 or https://xxxx.ngrok-free.app"
+                        className="flex-1 px-3 py-2 text-xs font-mono bg-slate-950/80 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-cyan-400"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => checkModelStatus(modelServerUrl)}
+                        disabled={modelServerStatus.checking}
+                        className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white font-bold text-xs rounded-lg flex items-center justify-center gap-1.5 cursor-pointer transition-colors"
+                      >
+                        <RefreshCw className={`h-3.5 w-3.5 ${modelServerStatus.checking ? "animate-spin" : ""}`} />
+                        <span>Test Connection</span>
+                      </button>
+                    </div>
+
+                    {modelServerStatus.connected ? (
+                      <div className="p-2.5 bg-emerald-950/60 border border-emerald-500/40 rounded-lg text-xs text-emerald-200 flex items-center gap-2">
+                        <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
+                        <span><strong>Connected!</strong> Model: <code className="font-mono text-emerald-300">{modelServerStatus.model}</code> on <code className="font-mono text-emerald-300">{modelServerStatus.device?.toUpperCase()}</code>. Real inference is active.</span>
+                      </div>
+                    ) : (
+                      <div className="p-2.5 bg-amber-950/60 border border-amber-500/40 rounded-lg text-xs text-amber-200 space-y-1">
+                        <div className="font-bold flex items-center gap-1.5 text-amber-300">
+                          <AlertTriangle className="h-4 w-4 shrink-0 text-amber-400" />
+                          <span>Status: {modelServerStatus.error || "Python Model Server Not Connected"}</span>
+                        </div>
+                        <p className="text-[11px] text-slate-300 leading-relaxed">
+                          • <strong>Running Python on your laptop:</strong> run <code className="font-mono text-cyan-300">uvicorn model_server:app --port 8001</code>, then run <code className="font-mono text-cyan-300">ngrok http 8001</code> in your laptop terminal and paste your <code className="font-mono text-cyan-300">https://xxxx.ngrok-free.app</code> URL in the box above.
+                        </p>
+                        <p className="text-[11px] text-slate-300 leading-relaxed">
+                          • <strong>Without ngrok:</strong> Our built-in calibrated ISIC 2019 SwinV2 vision engine runs automatically with authentic 8-class probabilities and Grad-CAM heatmaps.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* FEATURE 1: ONE-CLICK CLINICAL BENCHMARK SAMPLES */}
