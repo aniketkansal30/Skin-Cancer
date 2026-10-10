@@ -521,7 +521,7 @@ export default function PatientDashboard({ user }: PatientDashboardProps) {
       // Link to or create lesion
       let finalLesionId = lesionId;
       if (lesionId === "new_lesion") {
-        const newLId = "lesion-" + Math.random().toString(36).substr(2, 9);
+        const newLId = crypto.randomUUID();
         const nicknameVal = lesionNickname.trim() || `${locData} Mole #${Math.floor(100 + Math.random() * 900)}`;
         const { error: lesionErr } = await supabase.from("lesions").insert({
           id: newLId,
