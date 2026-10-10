@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+﻿import React, { useState, useEffect } from "react";
 import {
   Plus, History, Clipboard, AlertTriangle, Download,
   Activity, CheckCircle, Clock, ExternalLink, Sliders,
@@ -439,7 +439,7 @@ export default function PatientDashboard({ user }: PatientDashboardProps) {
     setTimeout(runStages, stageIntervals[0]);
   };
 
-  // Launch AI Pipeline — runs the inference and inserts the result into Supabase
+  // Launch AI Pipeline â€” runs the inference and inserts the result into Supabase
   const runAiScreening = async () => {
     if (!selectedImage) return;
 
@@ -596,13 +596,13 @@ export default function PatientDashboard({ user }: PatientDashboardProps) {
     }
   };
 
-  // Handle consultation booking — inserts directly into Supabase
+  // Handle consultation booking â€” inserts directly into Supabase
   const handleBookConsultation = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedScan || !consultDoctorId) return;
 
     if (!preferredDate || !preferredTime) {
-      return; // date/time required — button stays disabled below until both are set
+      return; // date/time required â€” button stays disabled below until both are set
     }
 
     try {
@@ -749,7 +749,7 @@ export default function PatientDashboard({ user }: PatientDashboardProps) {
     ];
 
     factors.forEach((f) => {
-      doc.text(`•  ${f.label}: ${f.weight}% relative attribution weight`, 20, currentY);
+      doc.text(`â€¢  ${f.label}: ${f.weight}% relative attribution weight`, 20, currentY);
       currentY += 4.5;
     });
 
@@ -1040,7 +1040,7 @@ export default function PatientDashboard({ user }: PatientDashboardProps) {
                             {scans[0].riskLevel} Risk
                           </span>
                           <span className="text-xs font-mono font-bold bg-slate-100 text-slate-700 px-2.5 py-0.5 rounded-full">
-                            {scans[0].acronym} • {scans[0].confidence.toFixed(1)}% Confidence
+                            {scans[0].acronym} â€¢ {scans[0].confidence.toFixed(1)}% Confidence
                           </span>
                         </div>
 
@@ -1083,7 +1083,7 @@ export default function PatientDashboard({ user }: PatientDashboardProps) {
                           " {scans[0].doctorVerdict.notes} "
                         </p>
                         <div className="text-[10px] text-slate-500 font-semibold text-right">
-                          — {scans[0].doctorVerdict.doctorName}
+                          â€” {scans[0].doctorVerdict.doctorName}
                         </div>
                       </div>
                     )}
@@ -1117,7 +1117,7 @@ export default function PatientDashboard({ user }: PatientDashboardProps) {
                                     <span className="inline-block h-2 w-2 rounded-full bg-teal-500 animate-pulse" />
                                     {lesion.nickname || `${lesion.body_location} Lesion`}
                                   </h5>
-                                  <p className="text-[10px] text-slate-400 font-medium">Location: {lesion.body_location} • Tracked since {new Date(lesion.created_at).toLocaleDateString()}</p>
+                                  <p className="text-[10px] text-slate-400 font-medium">Location: {lesion.body_location} â€¢ Tracked since {new Date(lesion.created_at).toLocaleDateString()}</p>
                                 </div>
                                 <span className="text-[9px] font-mono font-bold bg-slate-100 border border-slate-200 text-slate-600 px-2 py-0.5 rounded">
                                   {lesionScans.length} Scan{lesionScans.length !== 1 ? "s" : ""}
@@ -1174,7 +1174,7 @@ export default function PatientDashboard({ user }: PatientDashboardProps) {
                                               {isLatest && <span className="text-[8px] bg-teal-100 text-teal-800 font-extrabold px-1.5 py-0.2 rounded-full uppercase">Current</span>}
                                             </div>
                                             <p className="text-[10px] text-slate-500 leading-relaxed font-mono">
-                                              Confidence: {scan.confidence.toFixed(1)}% • Uncertainty: {(scan.uncertaintyScore ? scan.uncertaintyScore * 100 : 15).toFixed(1)}%
+                                              Confidence: {scan.confidence.toFixed(1)}% â€¢ Uncertainty: {(scan.uncertaintyScore ? scan.uncertaintyScore * 100 : 15).toFixed(1)}%
                                             </p>
                                           </div>
 
@@ -1454,7 +1454,7 @@ export default function PatientDashboard({ user }: PatientDashboardProps) {
                       </label>
                       {lesionId !== "new_lesion" ? (
                         <div className="p-3 bg-cyan-50/50 border border-cyan-100 rounded-xl text-[11px] text-cyan-800 font-semibold flex items-center gap-2">
-                          <span>📍</span>
+                          <span>ðŸ“</span>
                           <span>Locked to existing lesion location: <strong>{bodyLocation}</strong></span>
                         </div>
                       ) : (
@@ -1621,7 +1621,7 @@ export default function PatientDashboard({ user }: PatientDashboardProps) {
                 onClick={() => setSelectedScan(null)}
                 className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-800 cursor-pointer font-semibold"
               >
-                ← Return to History List
+                â† Return to History List
               </button>
 
               <div className="bg-white rounded-2xl border border-slate-200/80 shadow-md p-6 sm:p-8 space-y-8">
@@ -1693,7 +1693,7 @@ export default function PatientDashboard({ user }: PatientDashboardProps) {
                         </h4>
                         {selectedScan.bodyLocation && (
                           <span className="text-xs bg-slate-100 border border-slate-200 text-slate-700 px-2.5 py-0.5 rounded-md font-semibold">
-                            📍 Location: {selectedScan.bodyLocation}
+                            ðŸ“ Location: {selectedScan.bodyLocation}
                           </span>
                         )}
                       </div>
@@ -1710,7 +1710,7 @@ export default function PatientDashboard({ user }: PatientDashboardProps) {
                           Neural Attention & Predictive Uncertainty
                         </h4>
                         <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wide ${selectedScan.needsMandatoryReview ? "bg-amber-100 text-amber-800 border border-amber-200 animate-pulse" : "bg-emerald-100 text-emerald-800 border border-emerald-200"}`}>
-                          {selectedScan.needsMandatoryReview ? "🚨 Needs Mandatory Review" : "✓ Within Margin of Safety"}
+                          {selectedScan.needsMandatoryReview ? "ðŸš¨ Needs Mandatory Review" : "âœ“ Within Margin of Safety"}
                         </span>
                       </div>
 
@@ -1764,7 +1764,7 @@ export default function PatientDashboard({ user }: PatientDashboardProps) {
                           " {selectedScan.doctorVerdict.notes} "
                         </p>
                         <div className="text-[10px] text-slate-500 font-semibold text-right">
-                          Reviewed by: {selectedScan.doctorVerdict.doctorName} • {new Date(selectedScan.doctorVerdict.reviewedAt).toLocaleString()}
+                          Reviewed by: {selectedScan.doctorVerdict.doctorName} â€¢ {new Date(selectedScan.doctorVerdict.reviewedAt).toLocaleString()}
                         </div>
                       </div>
                     ) : (
@@ -1943,10 +1943,10 @@ export default function PatientDashboard({ user }: PatientDashboardProps) {
                       onChange={(e) => setRiskFilter(e.target.value)}
                       className="px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold outline-none focus:ring-1 focus:ring-cyan-500 text-slate-700 cursor-pointer"
                     >
-                      <option value="all">⚠️ All Risk Levels</option>
-                      <option value="high">🔴 High Risk</option>
-                      <option value="medium">🟡 Medium Risk</option>
-                      <option value="low">🟢 Low Risk</option>
+                      <option value="all">âš ï¸ All Risk Levels</option>
+                      <option value="high">ðŸ”´ High Risk</option>
+                      <option value="medium">ðŸŸ¡ Medium Risk</option>
+                      <option value="low">ðŸŸ¢ Low Risk</option>
                     </select>
 
                     <select
@@ -1954,7 +1954,7 @@ export default function PatientDashboard({ user }: PatientDashboardProps) {
                       onChange={(e) => setLocationFilter(e.target.value)}
                       className="px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold outline-none focus:ring-1 focus:ring-cyan-500 text-slate-700 capitalize cursor-pointer"
                     >
-                      <option value="all">📍 All Body Locations</option>
+                      <option value="all">ðŸ“ All Body Locations</option>
                       {Array.from(
                         new Set(
                           scans
@@ -2062,7 +2062,7 @@ export default function PatientDashboard({ user }: PatientDashboardProps) {
 
                         {consult.scheduledAt ? (
                           <div className="text-[11px] text-cyan-800 bg-cyan-50 border border-cyan-100 px-3 py-1.5 rounded-lg font-semibold w-fit">
-                            📅 Confirmed: {new Date(consult.scheduledAt).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })}
+                            ðŸ“… Confirmed: {new Date(consult.scheduledAt).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })}
                           </div>
                         ) : consult.preferredAt ? (
                           <div className="text-[11px] text-slate-500 w-fit">

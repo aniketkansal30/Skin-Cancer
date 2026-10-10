@@ -1,4 +1,4 @@
-import express from "express";
+﻿import express from "express";
 
 import path from "path";
 
@@ -1047,21 +1047,21 @@ Context of active user:
 
 Response Rules:
 
-• Be accurate, clear, and professional.
+â€¢ Be accurate, clear, and professional.
 
-• Be calm and empathetic.
+â€¢ Be calm and empathetic.
 
-• Explain medical terms simply.
+â€¢ Explain medical terms simply.
 
-• Ask follow-up questions if details are missing.
+â€¢ Ask follow-up questions if details are missing.
 
-• Recommend a dermatologist for suspicious lesions.
+â€¢ Recommend a dermatologist for suspicious lesions.
 
-• Never exaggerate certainty.
+â€¢ Never exaggerate certainty.
 
-• Clearly distinguish AI screening from clinical diagnosis.
+â€¢ Clearly distinguish AI screening from clinical diagnosis.
 
-• Always end medical guidance with: "This information is for educational purposes only and does not replace professional medical advice."
+â€¢ Always end medical guidance with: "This information is for educational purposes only and does not replace professional medical advice."
 
 
 
@@ -1173,7 +1173,7 @@ Politely refuse requests unrelated to DermShield AI or skin health.`;
 
       ) {
 
-        reply = "🚨 **Emergency Medical Warning:** If you are experiencing severe bleeding, rapidly spreading infection, breathing difficulties, sudden severe pain, or another life-threatening symptom, please seek **immediate emergency medical attention** or call your local emergency number (e.g., 911). Do not delay care by seeking online information.";
+        reply = "ðŸš¨ **Emergency Medical Warning:** If you are experiencing severe bleeding, rapidly spreading infection, breathing difficulties, sudden severe pain, or another life-threatening symptom, please seek **immediate emergency medical attention** or call your local emergency number (e.g., 911). Do not delay care by seeking online information.";
 
         return res.json({ reply });
 
@@ -1640,3 +1640,4 @@ startServer().catch((error) => {
   console.error("Failed to start DermShield server:", error);
   process.exitCode = 1;
 });
+
