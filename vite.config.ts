@@ -54,10 +54,21 @@ export default defineConfig(() => {
     },
     server: {
       // HMR is disabled in AI Studio via DISABLE_HMR env var.
-      // Do not modify - file watching is disabled to prevent flickering during agent edits.
       hmr: process.env.DISABLE_HMR !== 'true',
       // Disable file watching when DISABLE_HMR is true to save CPU during agent edits.
-      watch: process.env.DISABLE_HMR === 'true' ? null : {},
+      // Otherwise watch, but ignore runtime data files that server.ts rewrites
+      // (db.json) so a scan does not trigger a full page reload.
+      watch:
+        process.env.DISABLE_HMR === 'true'
+          ? null
+          : {
+              ignored: [
+                '**/db.json',
+                '**/model_server/**',
+                '**/*.bak',
+                '**/scan_report.txt',
+              ],
+            },
     },
   };
 });
