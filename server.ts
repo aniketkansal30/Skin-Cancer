@@ -1376,7 +1376,7 @@ app.post("/api/predict", upload.single("file") as any, async (req, res) => {
     let prediction: any = null;
     let usedFallback = false;
 
-    try {
+        try {
       const form = new FormData();
       form.append("file", new Blob([new Uint8Array(imageBuffer)], { type: mimeType }), originalName);
 
@@ -1386,7 +1386,7 @@ app.post("/api/predict", upload.single("file") as any, async (req, res) => {
           "ngrok-skip-browser-warning": "1",
         },
         body: form,
-        signal: AbortSignal.timeout(2500),
+        signal: AbortSignal.timeout(120000),
       });
 
       if (modelResponse.ok) {
@@ -1397,7 +1397,13 @@ app.post("/api/predict", upload.single("file") as any, async (req, res) => {
           Number.isFinite(parsed.confidence)
         ) {
           prediction = parsed;
+          console.log(`[Model Proxy] Real model response OK: ${parsed.predictedClass} (${parsed.confidence})`);
+        } else {
+          console.warn("[Model Proxy] Model responded 200 but unexpected JSON shape. Keys:", Object.keys(parsed));
         }
+      } else {
+        const bodyText = await modelResponse.text().catch(() => "");
+        console.warn(`[Model Proxy] Model server HTTP ${modelResponse.status}:`, bodyText.slice(0, 300));
       }
     } catch (modelErr) {
       console.warn(`[Model Proxy] Python model at ${modelApiUrl} unreachable or timed out. Falling back to built-in clinical vision inference:`, (modelErr as any)?.message || modelErr);

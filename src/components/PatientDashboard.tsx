@@ -349,7 +349,7 @@ export default function PatientDashboard({ user }: PatientDashboardProps) {
 
           const targetBenchmark = benchmarkSpecimen || CLINICAL_BENCHMARK_SAMPLES.find(b => b.id === selectedBenchmarkId);
 
-          if (inferenceMode === "real" && !targetBenchmark) {
+          if (inferenceMode === "real") {
             try {
               const res = await fetch(apiUrl("/api/predict"), {
                 method: "POST",
