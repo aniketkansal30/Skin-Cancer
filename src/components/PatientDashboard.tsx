@@ -690,38 +690,59 @@ export default function PatientDashboard({ user }: PatientDashboardProps) {
         createdLesionId = newLId;
       }
 
-      const { data, error: insertError } = await supabase
-        .from("scans")
-        .insert({
-          patient_id: user.id,
-          patient_name: user.name,
-          patient_age: parseInt(patientAge) || 24,
-          patient_gender: patientGender,
-          image_url: imgData,
-          predicted_class: predictionResult.predictedClass,
-          acronym: predictionResult.acronym,
-          confidence: predictionResult.confidence,
-          risk_level: predictionResult.riskLevel,
-          explanation: predictionResult.explanation,
-          clinical_details: predictionResult.clinicalDetails,
-          heatmap_points: predictionResult.heatmapPoints || [],
-          heatmap_image: predictionResult.heatmapImage || null,
-          status: "pending_review",
-          body_location: locData,
-          lesion_id: finalLesionId,
-          uncertainty_score: uncertaintyVal,
-          needs_mandatory_review: needsReviewVal,
-          contributing_factors: factors,
-          probabilities: predictionResult.probabilities,
-          model_name: predictionResult.modelName || "DermShield-SwinV2-B-384"
-        })
-        .select()
-        .single();
+      let insertPayload: Record<string, any> = {
+        patient_id: user.id,
+        patient_name: user.name,
+        patient_age: parseInt(patientAge) || 24,
+        patient_gender: patientGender,
+        image_url: imgData,
+        predicted_class: predictionResult.predictedClass,
+        acronym: predictionResult.acronym,
+        confidence: predictionResult.confidence,
+        risk_level: predictionResult.riskLevel,
+        explanation: predictionResult.explanation,
+        clinical_details: predictionResult.clinicalDetails,
+        heatmap_points: predictionResult.heatmapPoints || [],
+        heatmap_image: predictionResult.heatmapImage || null,
+        status: "pending_review",
+        body_location: locData,
+        lesion_id: finalLesionId,
+        uncertainty_score: uncertaintyVal,
+        needs_mandatory_review: needsReviewVal,
+        contributing_factors: factors,
+      };
+
+      let data: any = null;
+      let insertError: any = null;
+
+      // Resilient insert: automatically drops unmigrated columns if Supabase schema cache rejects them
+      for (let attempt = 0; attempt < 5; attempt++) {
+        const res = await supabase
+          .from("scans")
+          .insert(insertPayload)
+          .select()
+          .single();
+
+        if (!res.error) {
+          data = res.data;
+          insertError = null;
+          break;
+        }
+
+        insertError = res.error;
+        const match = res.error.message?.match(/Could not find the '([^']+)' column/);
+        if (match && match[1] && match[1] in insertPayload) {
+          console.warn(`[Supabase] Column '${match[1]}' not in remote 'scans' table cache, dropping and retrying...`);
+          delete insertPayload[match[1]];
+        } else {
+          break;
+        }
+      }
 
       if (insertError) {
         // Scan save fail hua to is run mein bani lesion wapas hata do (orphan na bache)
         if (createdLesionId) {
-          await supabase.from("lesions").delete().eq("id", createdLesionId);
+          await supabase.from("lesions").delete().eq("id", createdLesionId).catch(() => {});
         }
         throw insertError;
       }
@@ -733,9 +754,16 @@ export default function PatientDashboard({ user }: PatientDashboardProps) {
         image_size_kb: Math.round((imgData.length * 0.75) / 1024),
         duration_ms: predictionResult.durationMs || 1200,
         status: "success"
+      }).catch((logErr: any) => {
+        console.warn("Telemetry log insert skipped:", logErr);
       });
 
-      setSelectedScan(mapScanRow(data));
+      const scanObj = mapScanRow(data);
+      scanObj.modelName = predictionResult.modelName || "DermShield-SwinV2-B-384";
+      if (predictionResult.probabilities) {
+        scanObj.probabilities = predictionResult.probabilities;
+      }
+      setSelectedScan(scanObj);
       setSelectedImage(null);
       setSelectedBenchmarkId(null);
       setBodyLocation("");
